@@ -1,0 +1,107 @@
+// Schéma Prisma — base SQLite locale pour le suivi de paris hippiques.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Cheval favori suivi par l'utilisateur.
+model Horse {
+  id            Int      @id @default(autoincrement())
+  name          String
+  sex           String? // M / F / H (hongre)
+  age           Int?
+  discipline    String? // attele / monte / plat / obstacle / trot
+  usualDriver   String? // driver ou jockey habituel
+  favHippodrome String? // hippodrome de prédilection
+  notes         String?
+  isFavorite    Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  runners Runner[]
+}
+
+/// Réunion PMU (R1, R2…) d'une journée sur un hippodrome.
+model Meeting {
+  id         Int      @id @default(autoincrement())
+  date       String // AAAA-MM-JJ
+  reunion    Int
+  hippodrome String
+  createdAt  DateTime @default(now())
+
+  races Race[]
+
+  @@unique([date, reunion])
+}
+
+/// Course (C1, C2…) d'une réunion.
+model Race {
+  id         Int     @id @default(autoincrement())
+  meetingId  Int
+  course     Int
+  name       String?
+  discipline String?
+  distance   Int?
+  betTypes   String? // liste séparée par des virgules
+
+  meeting  Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  runners  Runner[]
+  snapshot RawPmuSnapshot?
+
+  @@unique([meetingId, course])
+}
+
+/// Partant d'une course, avec cote et probabilité estimée.
+model Runner {
+  id        Int     @id @default(autoincrement())
+  raceId    Int
+  horseId   Int?
+  number    Int
+  name      String
+  odds      Float?
+  estProb   Float? // probabilité estimée (0..1)
+  scratched Boolean @default(false)
+
+  race  Race   @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  horse Horse? @relation(fields: [horseId], references: [id], onDelete: SetNull)
+}
+
+/// Pari réellement joué (base du suivi comptable).
+model Bet {
+  id        Int      @id @default(autoincrement())
+  date      String // AAAA-MM-JJ
+  betType   String // simple_gagnant, couple_place, tierce, quinte...
+  label     String? // description libre (chevaux joués, course...)
+  raceId    Int?
+  stake     Float
+  odds      Float? // cote/rapport encaissé si gagné
+  status    String   @default("pending") // pending | won | lost
+  payout    Float? // gain brut encaissé
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Mouvement de bankroll hors pari (dépôt / retrait).
+model Transaction {
+  id        Int      @id @default(autoincrement())
+  date      String
+  type      String // deposit | withdrawal
+  amount    Float
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+/// Cache brut des réponses de l'API PMU turfinfo (limite les appels réseau).
+model RawPmuSnapshot {
+  id        Int      @id @default(autoincrement())
+  cacheKey  String   @unique // ex: programme:2026-07-03  ou  race:2026-07-03:1:1
+  payload   String // JSON sérialisé
+  fetchedAt DateTime @default(now())
+  raceId    Int?     @unique
+
+  race Race? @relation(fields: [raceId], references: [id], onDelete: SetNull)
+}

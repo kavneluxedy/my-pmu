@@ -1,0 +1,21 @@
+{
+  "name": "pmu-suite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Application web auto-hébergée de suivi et d'optimisation pour parieur hippique (PMU)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev:api": "npm run dev --workspace @pmu/api",
+    "dev:web": "npm run dev --workspace @pmu/web",
+    "db:migrate": "npm run db:migrate --workspace @pmu/api",
+    "db:seed": "npm run db:seed --workspace @pmu/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

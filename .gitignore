@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.local
+
+# SQLite
+*.db
+*.db-journal
+apps/api/prisma/*.db
+
+# Prisma generated client
+apps/api/src/generated/
+
+# Vite
+apps/web/dist/
+.vite/
+
+# OS
+.DS_Store
+Thumbs.db
