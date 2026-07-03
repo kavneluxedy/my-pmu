@@ -110,6 +110,84 @@ export const BET_TYPES: BetType[] = [
   "multi",
 ];
 
+/**
+ * Taux de retour au joueur (part de la masse redistribuée aux gagnants) par
+ * type de pari. Le prélèvement PMU = 1 − TRJ. Valeurs indicatives issues des
+ * barèmes PMU (arrêté du 22 novembre 2017) ; en mode « masses » l'appelant peut
+ * surcharger cette valeur via le paramètre `trj`.
+ */
+export const TRJ: Record<BetType, number> = {
+  simple_gagnant: 0.85,
+  simple_place: 0.85,
+  couple_gagnant: 0.76,
+  couple_place: 0.76,
+  couple_ordre: 0.76,
+  trio: 0.75,
+  tierce: 0.75,
+  quarte: 0.74,
+  quinte: 0.74,
+  multi: 0.68,
+  deux_sur_quatre: 0.75,
+};
+
+/** Taux de retour au joueur par défaut pour un type de pari donné. */
+export function trjFor(betType: BetType): number {
+  return TRJ[betType];
+}
+
+/**
+ * Rapport brut minimum garanti par le PMU pour 1 € misé : le rapport reversé ne
+ * descend jamais sous ce seuil, même sur un ultra-favori.
+ */
+export const RAPPORT_MINIMUM = 1.1;
+
+/**
+ * Mode de calcul d'une prévision de gain.
+ * - `cote` : le rapport est connu (donnée réelle PMU ou saisi) → gain = mise × rapport.
+ * - `masses` : le rapport est reconstruit à partir des enjeux misés (pari mutuel).
+ */
+export type PayoutMode = "cote" | "masses";
+
+/** Résultat structuré d'une prévision de gain (commun aux deux modes). */
+export interface PayoutResult {
+  betType: BetType;
+  mode: PayoutMode;
+  /** Rapport net pour 1 € misé (bénéfice par euro, hors récupération de la mise). */
+  rapportNetPourUnEuro: number;
+  /** Rapport brut pour 1 € misé (mise incluse) = net + 1, borné à RAPPORT_MINIMUM. */
+  rapportBrutPourUnEuro: number;
+  /** Mise engagée (€). */
+  stake: number;
+  /** Gain brut reversé = mise × rapport brut. */
+  grossPayout: number;
+  /** Gain net = brut − mise. */
+  netProfit: number;
+  /** Retour sur mise = brut / mise (identique au rapport brut pour 1 €). */
+  returnOnStake: number;
+}
+
+/** Enjeux d'une course pour un Simple (Gagnant ou Placé) en mode « masses ». */
+export interface SimpleMassesInput {
+  /** Masse totale misée sur ce type de pari, tous chevaux confondus (€). */
+  totalPool: number;
+  /** Enjeu misé sur le cheval concerné (€). */
+  stakeOnHorse: number;
+  /** Nombre de partants (détermine le nombre de placés pour le Simple Placé). */
+  runnersCount: number;
+  /** Taux de retour joueur ; défaut = TRJ[betType]. */
+  trj?: number;
+}
+
+/** Enjeux d'une course pour un Couplé (Gagnant ou Placé) en mode « masses ». */
+export interface CoupleMassesInput {
+  /** Masse totale misée sur ce type de pari (€). */
+  totalPool: number;
+  /** Enjeu misé sur la combinaison concernée (couplé non ordonné) (€). */
+  stakeOnCombination: number;
+  /** Taux de retour joueur ; défaut = TRJ[betType]. */
+  trj?: number;
+}
+
 /** Sélection de chevaux pour un ticket combiné (numéros de partants). */
 export interface TicketSelection {
   /**
