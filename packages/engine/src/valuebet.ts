@@ -89,10 +89,19 @@ export function analyzeValueBet(input: ValueBetInput): ValueBetResult {
     bankroll = 0,
     kellyFraction = 0.25,
     edgeThreshold = 0,
+    betType,
   } = input;
 
   if (estimatedProbability < 0 || estimatedProbability > 1) {
     throw new Error("La probabilité estimée doit être comprise entre 0 et 1.");
+  }
+  if (betType) {
+    const min = minStakeFor(betType);
+    if (stake < min) {
+      throw new Error(
+        `La mise doit être d'au moins ${min} € pour ce type de pari (règle pmu.fr).`,
+      );
+    }
   }
   const implied = impliedProbability(odds);
   const ev = expectedValue(estimatedProbability, odds, stake);

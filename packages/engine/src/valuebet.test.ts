@@ -76,4 +76,26 @@ describe("analyzeValueBet", () => {
   it("rejette une probabilité hors [0,1]", () => {
     expect(() => analyzeValueBet({ odds: 3, estimatedProbability: 1.5 })).toThrow();
   });
+
+  it("rejette une mise sous le minimum du type de pari", () => {
+    // Multi : minimum 3 €. Une mise de 2 € doit être refusée.
+    expect(() =>
+      analyzeValueBet({ odds: 3, estimatedProbability: 0.4, stake: 2, betType: "multi" }),
+    ).toThrow();
+  });
+
+  it("accepte une mise égale au minimum du type de pari", () => {
+    const res = analyzeValueBet({
+      odds: 3,
+      estimatedProbability: 0.4,
+      stake: 3,
+      betType: "multi",
+    });
+    expect(res.edge).toBeGreaterThan(0);
+  });
+
+  it("sans betType, aucun minimum n'est imposé (rétrocompatible)", () => {
+    const res = analyzeValueBet({ odds: 3, estimatedProbability: 0.4, stake: 0.5 });
+    expect(res.isValueBet).toBe(true);
+  });
 });

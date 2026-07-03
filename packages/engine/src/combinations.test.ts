@@ -87,6 +87,19 @@ describe("computeTicketCost", () => {
   it("rejette une mise nulle ou négative", () => {
     expect(() => computeTicketCost("trio", { associated: [1, 2, 3] }, 0)).toThrow();
   });
+
+  it("rejette une mise sous le minimum du type (simple gagnant < 2 €)", () => {
+    expect(() =>
+      computeTicketCost("simple_gagnant", { associated: [1] }, 1.5),
+    ).toThrow();
+    // 2 € est exactement le minimum : accepté.
+    expect(computeTicketCost("simple_gagnant", { associated: [1] }, 2).totalCost).toBe(2);
+  });
+
+  it("accepte une mise au minimum spécifique du tiercé (1 €)", () => {
+    const cost = computeTicketCost("tierce", { associated: [1, 2, 3, 4] }, 1);
+    expect(cost.totalCost).toBe(4);
+  });
 });
 
 describe("computePotentialPayout", () => {
