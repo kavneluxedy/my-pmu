@@ -128,7 +128,7 @@ export default function ImportPmu() {
   }, [searchParams]);
 
   const openInSimulator = (r: ProviderRace) => {
-    setRaceStore(r);
+    setRaceStore(r, date);
     navigate("/simulator");
   };
 

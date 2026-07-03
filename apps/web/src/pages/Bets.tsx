@@ -1,17 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Bet } from "../api/client.js";
-
-const BET_TYPES = [
-  "simple_gagnant",
-  "simple_place",
-  "couple_gagnant",
-  "couple_place",
-  "trio",
-  "tierce",
-  "quarte",
-  "quinte",
-  "multi",
-];
+import { BET_TYPE_LABELS, BET_TYPES } from "../lib/betTypes.js";
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -75,7 +64,7 @@ export default function Bets() {
           <div className="field">
             <label>Type</label>
             <select value={form.betType} onChange={(e) => setForm({ ...form, betType: e.target.value })}>
-              {BET_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {BET_TYPES.map((t) => <option key={t} value={t}>{BET_TYPE_LABELS[t]}</option>)}
             </select>
           </div>
           <div className="field" style={{ gridColumn: "span 2" }}>

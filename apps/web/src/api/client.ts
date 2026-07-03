@@ -73,6 +73,18 @@ export interface ValueBetResult {
   kellyStake: number;
 }
 
+/** Résultat d'une prévision de gain (miroir de `PayoutResult` de @pmu/engine). */
+export interface PayoutResult {
+  betType: string;
+  mode: "cote" | "masses";
+  rapportNetPourUnEuro: number;
+  rapportBrutPourUnEuro: number;
+  stake: number;
+  grossPayout: number;
+  netProfit: number;
+  returnOnStake: number;
+}
+
 export interface ProviderRace {
   reunion: number;
   course: number;
@@ -118,6 +130,8 @@ export const api = {
     request<DutchingResult>("/api/sim/dutching", { method: "POST", body: JSON.stringify(body) }),
   simValueBet: (body: unknown) =>
     request<ValueBetResult>("/api/sim/valuebet", { method: "POST", body: JSON.stringify(body) }),
+  simPayout: (body: unknown) =>
+    request<PayoutResult>("/api/sim/payout", { method: "POST", body: JSON.stringify(body) }),
 
   // Import PMU
   programme: (date: string) =>
