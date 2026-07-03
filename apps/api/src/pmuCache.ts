@@ -9,12 +9,13 @@ const provider = new PmuTurfinfoProvider();
 
 /**
  * Durées de fraîcheur du cache (ms). Au-delà, on rafraîchit depuis l'API.
- * Le programme porte l'heure de départ (sensible au temps : le PMU réajuste
- * l'imminence du départ en direct), on le garde donc bien plus frais que les
- * partants/cotes d'une course.
+ * Programme comme course sont sensibles au temps (heures/imminence de départ et
+ * cotes qui bougent en direct) : on garde les deux caches courts.
  */
 const TTL_PROGRAMME_MS = 1000 * 60; // 60 s
-const TTL_RACE_MS = 1000 * 60 * 10; // 10 minutes
+// Les cotes des partants bougent jusqu'au départ ; on garde le cache court pour
+// que le polling du simulateur (~60 s) obtienne des cotes réellement fraîches.
+const TTL_RACE_MS = 1000 * 60; // 60 s
 
 async function readCache<T>(cacheKey: string, ttlMs: number): Promise<T | null> {
   const row = await prisma.rawPmuSnapshot.findUnique({ where: { cacheKey } });
