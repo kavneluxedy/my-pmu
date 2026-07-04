@@ -19,6 +19,8 @@ import type {
   CitationBetType,
   CitationRunner,
   OddsProvider,
+  ProviderArrival,
+  ProviderArrivalRunner,
   ProviderCitations,
   ProviderProgramme,
   ProviderRace,
@@ -118,6 +120,29 @@ export function normalizeRunner(raw: Record<string, unknown>): ProviderRunner {
     trainer: raw.entraineur ? String(raw.entraineur) : undefined,
     scratched: raw.statut === "NON_PARTANT",
   };
+}
+
+/**
+ * Normalise l'ordre d'arrivée brut du PMU vers ProviderArrival.
+ * Le champ `ordreArrivee` du PMU est typiquement un Array<Array<number>> :
+ * - index+1 = position classement
+ * - un sous-tableau à plusieurs entrées = dead-heat/ex-æquo
+ * Cherche dans raw.ordreArrivee, puis raw.rapportsDefinitifs si absent.
+ */
+export function normalizeArrival(raw: Record<string, unknown>): ProviderArrival {
+  const ordreBrut = (raw.ordreArrivee as unknown[]) ?? (raw.rapportsDefinitifs as unknown[]) ?? [];
+  const ordre: ProviderArrivalRunner[] = [];
+  ordreBrut.forEach((group, idx) => {
+    const nums = Array.isArray(group) ? group : [group];
+    const deadHeat = nums.length > 1;
+    for (const n of nums) {
+      const num = typeof n === "object" && n !== null
+        ? Number((n as Record<string, unknown>).numPmu ?? (n as Record<string, unknown>).numero ?? 0)
+        : Number(n);
+      if (num > 0) ordre.push({ position: idx + 1, number: num, deadHeat });
+    }
+  });
+  return { reunion: 0, course: 0, ordre, definitif: ordre.length > 0 };
 }
 
 export class PmuTurfinfoProvider implements OddsProvider {
@@ -228,5 +253,24 @@ export class PmuTurfinfoProvider implements OddsProvider {
     });
 
     return { reunion, course, updatetime, betTypes };
+  }
+
+  /**
+   * Récupère l'ordre d'arrivée définitif d'une course.
+   * Course non encore courue ou pas d'arrivée : renvoie une arrivée vide (definitif=false).
+   */
+  async getArrival(dateISO: string, reunion: number, course: number): Promise<ProviderArrival> {
+    const pmuDate = toPmuDate(dateISO);
+    let data: Record<string, unknown>;
+    try {
+      data = (await this.getJson(
+        `/programme/${pmuDate}/R${reunion}/C${course}/rapports-definitifs`,
+      )) as Record<string, unknown>;
+    } catch {
+      // Course non encore courue / pas d'arrivée : ne pas throw, renvoyer vide.
+      return { reunion, course, ordre: [], definitif: false };
+    }
+    const a = normalizeArrival(data);
+    return { ...a, reunion, course };
   }
 }

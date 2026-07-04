@@ -8,6 +8,7 @@ const links = [
   { to: "/horses", label: "Mes chevaux", icon: "🐎", end: false },
   { to: "/simulator", label: "Simulateur", icon: "⚡", end: false },
   { to: "/import", label: "Import PMU", icon: "↓", end: false },
+  { to: "/arrivees", label: "Arrivées", icon: "🏁", end: false },
 ];
 
 type Tone = "green" | "orange" | "red";

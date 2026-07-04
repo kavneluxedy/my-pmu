@@ -57,14 +57,16 @@ model Race {
 
 /// Partant d'une course, avec cote et probabilité estimée.
 model Runner {
-  id        Int     @id @default(autoincrement())
-  raceId    Int
-  horseId   Int?
-  number    Int
-  name      String
-  odds      Float?
-  estProb   Float? // probabilité estimée (0..1)
-  scratched Boolean @default(false)
+  id               Int     @id @default(autoincrement())
+  raceId           Int
+  horseId          Int?
+  number           Int
+  name             String
+  odds             Float?
+  estProb          Float? // probabilité estimée (0..1)
+  scratched        Boolean @default(false)
+  isFavorite       Boolean @default(false)
+  arrivalPosition  Int?
 
   race  Race   @relation(fields: [raceId], references: [id], onDelete: Cascade)
   horse Horse? @relation(fields: [horseId], references: [id], onDelete: SetNull)

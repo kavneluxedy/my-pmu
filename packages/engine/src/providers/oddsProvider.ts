@@ -46,11 +46,28 @@ export interface ProviderProgramme {
   meetings: ProviderMeeting[];
 }
 
+export interface ProviderArrivalRunner {
+  position: number;
+  number: number;
+  name?: string;
+  deadHeat?: boolean;
+}
+
+export interface ProviderArrival {
+  reunion: number;
+  course: number;
+  ordre: ProviderArrivalRunner[];
+  definitif: boolean;
+  updatetime?: number;
+}
+
 export interface OddsProvider {
   /** Récupère le programme complet d'une journée. */
   getProgramme(dateISO: string): Promise<ProviderProgramme>;
   /** Récupère une course précise avec ses partants et cotes. */
   getRace(dateISO: string, reunion: number, course: number): Promise<ProviderRace>;
+  /** Récupère l'ordre d'arrivée définitif d'une course. */
+  getArrival(dateISO: string, reunion: number, course: number): Promise<ProviderArrival>;
 }
 
 /**
