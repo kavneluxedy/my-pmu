@@ -12,10 +12,14 @@
  *   /rest/client/61/programme/{JJMMAAAA}
  *   /rest/client/61/programme/{JJMMAAAA}/R{n}/C{n}/participants
  *   /rest/client/61/programme/{JJMMAAAA}/R{n}/C{n}/rapports-definitifs
+ *   /rest/client/61/programme/{JJMMAAAA}/R{n}/C{n}/citations  (enjeux / rapports probables)
  */
-import type { Discipline } from "../types.js";
+import type { BetType, Discipline } from "../types.js";
 import type {
+  CitationBetType,
+  CitationRunner,
   OddsProvider,
+  ProviderCitations,
   ProviderProgramme,
   ProviderRace,
   ProviderRunner,
@@ -48,6 +52,49 @@ export function mapDiscipline(specialite?: string): Discipline | undefined {
   if (s.includes("HAIE") || s.includes("STEEPLE") || s.includes("OBSTACLE")) return "obstacle";
   if (s.includes("TROT")) return "trot";
   return undefined;
+}
+
+/**
+ * Correspondance des libellés `typePari` PMU vers nos BetType internes.
+ * Seuls les types exploitables par le simulateur de gains sont mappés ; les
+ * autres (E_SUPER_QUATRE, E_REPORT_PLUS, …) restent sans BetType (le libellé
+ * brut est tout de même conservé côté normalisation).
+ */
+const PMU_TYPE_PARI: Record<string, BetType> = {
+  E_SIMPLE_GAGNANT: "simple_gagnant",
+  E_SIMPLE_PLACE: "simple_place",
+  E_COUPLE_GAGNANT: "couple_gagnant",
+  E_COUPLE_PLACE: "couple_place",
+  E_TRIO: "trio",
+};
+
+/** Mappe un libellé `typePari` PMU vers notre BetType (undefined si inconnu). */
+export function mapTypePari(typePari?: string): BetType | undefined {
+  if (!typePari) return undefined;
+  return PMU_TYPE_PARI[typePari.toUpperCase()];
+}
+
+/**
+ * Normalise un participant « citations » brut vers CitationRunner. On ne retient
+ * que l'enjeu de POSITION 1 (compatible avec le moteur de masses pour Simple et
+ * Couplé) ; les positions > 1 (Super Quatre) sont ignorées. Renvoie null quand
+ * aucune citation exploitable (pas d'enjeu numérique) n'est présente.
+ */
+export function normalizeCitationRunner(
+  raw: Record<string, unknown>,
+): CitationRunner | null {
+  const citations =
+    (raw.citations as Array<{ position?: number; enjeu?: number; ratio?: number }>) ?? [];
+  const c1 = citations.find((c) => c.position === 1) ?? citations[0];
+  if (!c1 || typeof c1.enjeu !== "number") return null;
+  return {
+    number: Number(raw.numPmu ?? 0),
+    name: String(raw.nom ?? ""),
+    scratched: raw.statut === "NON_PARTANT",
+    favoris: raw.favoris === true,
+    enjeu: c1.enjeu,
+    ratio: typeof c1.ratio === "number" ? c1.ratio : undefined,
+  };
 }
 
 /**
@@ -138,5 +185,48 @@ export class PmuTurfinfoProvider implements OddsProvider {
       course,
       runners: participants.map(normalizeRunner),
     };
+  }
+
+  /**
+   * Récupère les « citations » d'une course : par type de pari, la masse totale
+   * misée et l'enjeu (+ ratio) de chaque cheval. Alimente le mode « masses » du
+   * simulateur de gains avec des données réelles (rapports probables).
+   */
+  async getCitations(
+    dateISO: string,
+    reunion: number,
+    course: number,
+  ): Promise<ProviderCitations> {
+    const pmuDate = toPmuDate(dateISO);
+    const data = (await this.getJson(
+      `/programme/${pmuDate}/R${reunion}/C${course}/citations?paris=&specialisation=INTERNET`,
+    )) as { listeCitations?: Array<Record<string, unknown>> };
+    const liste = data.listeCitations ?? [];
+
+    let updatetime: number | undefined;
+    const betTypes: CitationBetType[] = liste.map((el) => {
+      const rawTypePari = String(el.typePari ?? "");
+      const betType = mapTypePari(rawTypePari);
+      if (typeof el.updatetime === "number") {
+        updatetime = Math.max(updatetime ?? 0, el.updatetime);
+      }
+
+      const participants = el.participants as Array<Record<string, unknown>> | undefined;
+      if (el.indisponible === true || !participants) {
+        return { betType, rawTypePari, indisponible: true, totalPool: 0, runners: [] };
+      }
+
+      const runners = participants
+        .map(normalizeCitationRunner)
+        .filter((r): r is CitationRunner => r !== null);
+      // La masse partageable ne concerne que les partants réels : on exclut les
+      // non-partants du total (leurs enjeux sont remboursés, pas redistribués).
+      const totalPool = runners
+        .filter((r) => !r.scratched)
+        .reduce((sum, r) => sum + r.enjeu, 0);
+      return { betType, rawTypePari, totalPool, runners };
+    });
+
+    return { reunion, course, updatetime, betTypes };
   }
 }

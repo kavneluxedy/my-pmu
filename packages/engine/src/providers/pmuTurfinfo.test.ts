@@ -3,6 +3,8 @@ import {
   PmuTurfinfoProvider,
   extractOdds,
   mapDiscipline,
+  mapTypePari,
+  normalizeCitationRunner,
   normalizeRunner,
   toPmuDate,
 } from "./pmuTurfinfo.js";
@@ -123,5 +125,123 @@ describe("PmuTurfinfoProvider", () => {
     const fakeFetch = async () => ({ ok: false, status: 503, json: async () => ({}) });
     const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
     await expect(provider.getProgramme("2026-07-03")).rejects.toThrow();
+  });
+});
+
+describe("mapTypePari", () => {
+  it("mappe les types de pari exploitables", () => {
+    expect(mapTypePari("E_SIMPLE_GAGNANT")).toBe("simple_gagnant");
+    expect(mapTypePari("E_SIMPLE_PLACE")).toBe("simple_place");
+    expect(mapTypePari("E_COUPLE_PLACE")).toBe("couple_place");
+    expect(mapTypePari("E_TRIO")).toBe("trio");
+  });
+  it("ignore les types non pris en charge", () => {
+    expect(mapTypePari("E_SUPER_QUATRE")).toBeUndefined();
+    expect(mapTypePari("E_REPORT_PLUS")).toBeUndefined();
+    expect(mapTypePari(undefined)).toBeUndefined();
+  });
+});
+
+describe("normalizeCitationRunner", () => {
+  it("retient l'enjeu de position 1 et remonte favoris/scratched", () => {
+    const r = normalizeCitationRunner({
+      numPmu: 3,
+      nom: "JERZINHO SPORT",
+      statut: "PARTANT",
+      favoris: true,
+      citations: [
+        { position: 2, enjeu: 111, ratio: 5 },
+        { position: 1, enjeu: 699800, ratio: 42.81 },
+      ],
+    });
+    expect(r).toEqual({
+      number: 3,
+      name: "JERZINHO SPORT",
+      scratched: false,
+      favoris: true,
+      enjeu: 699800,
+      ratio: 42.81,
+    });
+  });
+  it("marque les non-partants et renvoie null sans citation exploitable", () => {
+    const np = normalizeCitationRunner({ numPmu: 5, nom: "ABSENT", statut: "NON_PARTANT", citations: [] });
+    expect(np).toBeNull();
+    const ok = normalizeCitationRunner({ numPmu: 6, nom: "OK", statut: "NON_PARTANT", citations: [{ position: 1, enjeu: 10 }] });
+    expect(ok?.scratched).toBe(true);
+  });
+});
+
+// Extrait réel réduit de la réponse « citations » (R6/C2 du 04/07/2026).
+const CITATIONS_SAMPLE = {
+  spritesCasaques: { small: {} },
+  listeCitations: [
+    {
+      typePari: "E_SIMPLE_GAGNANT",
+      updatetime: 1_783_185_190_000,
+      participants: [
+        { numPmu: 3, nom: "JERZINHO SPORT", statut: "PARTANT", favoris: true, citations: [{ position: 1, enjeu: 699800, ratio: 42.81 }] },
+        { numPmu: 1, nom: "HARLEQUIN", statut: "PARTANT", favoris: false, citations: [{ position: 1, enjeu: 180530, ratio: 11.04 }] },
+        { numPmu: 9, nom: "FORFAIT", statut: "NON_PARTANT", favoris: false, citations: [{ position: 1, enjeu: 5000, ratio: 0.3 }] },
+      ],
+    },
+    {
+      typePari: "E_SUPER_QUATRE",
+      updatetime: 1_783_185_210_000,
+      participants: [
+        {
+          numPmu: 1,
+          nom: "HARLEQUIN",
+          statut: "PARTANT",
+          citations: [
+            { position: 1, enjeu: 55750, ratio: 12.86 },
+            { position: 2, enjeu: 82550, ratio: 19.04 },
+          ],
+        },
+      ],
+    },
+    { typePari: "E_REPORT_PLUS", indisponible: true },
+  ],
+};
+
+describe("getCitations", () => {
+  const fakeFetch = async () => ({ ok: true, status: 200, json: async () => CITATIONS_SAMPLE });
+
+  it("normalise les blocs et exclut les non-partants de la masse", async () => {
+    const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
+    const cit = await provider.getCitations("2026-07-04", 6, 2);
+
+    const sg = cit.betTypes.find((b) => b.rawTypePari === "E_SIMPLE_GAGNANT");
+    expect(sg?.betType).toBe("simple_gagnant");
+    // totalPool = 699800 + 180530 (le NON_PARTANT est exclu).
+    expect(sg?.totalPool).toBe(880330);
+    expect(sg?.runners).toHaveLength(3);
+    expect(sg?.runners.find((r) => r.number === 9)?.scratched).toBe(true);
+    expect(cit.updatetime).toBe(1_783_185_210_000);
+  });
+
+  it("conserve le libellé brut sans BetType pour un type non mappé", async () => {
+    const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
+    const cit = await provider.getCitations("2026-07-04", 6, 2);
+    const sq = cit.betTypes.find((b) => b.rawTypePari === "E_SUPER_QUATRE");
+    expect(sq?.betType).toBeUndefined();
+    // Seule la position 1 est retenue (55750), les positions > 1 ignorées.
+    expect(sq?.runners[0]?.enjeu).toBe(55750);
+    expect(sq?.totalPool).toBe(55750);
+  });
+
+  it("marque un bloc indisponible sans participants", async () => {
+    const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
+    const cit = await provider.getCitations("2026-07-04", 6, 2);
+    const rp = cit.betTypes.find((b) => b.rawTypePari === "E_REPORT_PLUS");
+    expect(rp?.indisponible).toBe(true);
+    expect(rp?.runners).toEqual([]);
+    expect(rp?.totalPool).toBe(0);
+  });
+
+  it("remonte une erreur réseau", async () => {
+    const provider = new PmuTurfinfoProvider({
+      fetchImpl: async () => ({ ok: false, status: 502, json: async () => ({}) }),
+    });
+    await expect(provider.getCitations("2026-07-04", 6, 2)).rejects.toThrow();
   });
 });

@@ -54,6 +54,30 @@ export const BET_TYPE_LABELS: Record<BetType, string> = {
   deux_sur_quatre: "2 sur 4",
 };
 
+/**
+ * Taux de retour au joueur par type de pari (miroir de `TRJ` de @pmu/engine).
+ * Sert à afficher un rapport probable indicatif à partir des enjeux misés
+ * (masse × TRJ ÷ enjeu) ; le calcul contractuel reste fait par l'API.
+ */
+export const TRJ: Record<BetType, number> = {
+  simple_gagnant: 0.85,
+  simple_place: 0.85,
+  couple_gagnant: 0.76,
+  couple_place: 0.76,
+  couple_ordre: 0.76,
+  trio: 0.75,
+  tierce: 0.75,
+  quarte: 0.74,
+  quinte: 0.74,
+  multi: 0.68,
+  deux_sur_quatre: 0.75,
+};
+
+/** Taux de retour au joueur par défaut pour un type de pari donné. */
+export function trjFor(betType: BetType): number {
+  return TRJ[betType];
+}
+
 /** Ordre d'affichage canonique des types de paris. */
 export const BET_TYPES: BetType[] = [
   "simple_gagnant",

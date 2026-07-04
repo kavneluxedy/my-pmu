@@ -2,7 +2,12 @@
  * Accès aux données PMU via le provider turfinfo, avec cache en base pour
  * limiter les appels réseau (respect des CGU / bonne citoyenneté).
  */
-import { PmuTurfinfoProvider, type ProviderProgramme, type ProviderRace } from "@pmu/engine";
+import {
+  PmuTurfinfoProvider,
+  type ProviderCitations,
+  type ProviderProgramme,
+  type ProviderRace,
+} from "@pmu/engine";
 import { prisma } from "./db.js";
 
 const provider = new PmuTurfinfoProvider();
@@ -12,10 +17,13 @@ const provider = new PmuTurfinfoProvider();
  * Programme comme course sont sensibles au temps (heures/imminence de départ et
  * cotes qui bougent en direct) : on garde les deux caches courts.
  */
-const TTL_PROGRAMME_MS = 1000 * 60; // 60 s
+const TTL_PROGRAMME_MS = 1000 * 30; // 30 s
 // Les cotes des partants bougent jusqu'au départ ; on garde le cache court pour
 // que le polling du simulateur (~60 s) obtienne des cotes réellement fraîches.
-const TTL_RACE_MS = 1000 * 60; // 60 s
+const TTL_RACE_MS = 1000 * 30; // 30 s
+// Les enjeux (« citations ») bougent en direct au même rythme que les cotes ;
+// on garde un cache court pour des rapports probables réellement frais.
+const TTL_CITATIONS_MS = 1000 * 30; // 30 s
 
 async function readCache<T>(cacheKey: string, ttlMs: number): Promise<T | null> {
   const row = await prisma.rawPmuSnapshot.findUnique({ where: { cacheKey } });
@@ -51,6 +59,19 @@ export async function getRace(
   const cached = await readCache<ProviderRace>(key, TTL_RACE_MS);
   if (cached) return cached;
   const fresh = await provider.getRace(dateISO, reunion, course);
+  await writeCache(key, fresh);
+  return fresh;
+}
+
+export async function getCitations(
+  dateISO: string,
+  reunion: number,
+  course: number,
+): Promise<ProviderCitations> {
+  const key = `citations:${dateISO}:${reunion}:${course}`;
+  const cached = await readCache<ProviderCitations>(key, TTL_CITATIONS_MS);
+  if (cached) return cached;
+  const fresh = await provider.getCitations(dateISO, reunion, course);
   await writeCache(key, fresh);
   return fresh;
 }

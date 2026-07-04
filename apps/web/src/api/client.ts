@@ -105,6 +105,33 @@ export interface ProviderProgramme {
   }[];
 }
 
+/** Enjeu misé sur un cheval pour un type de pari (miroir de @pmu/engine). */
+export interface CitationRunner {
+  number: number;
+  name: string;
+  scratched?: boolean;
+  favoris?: boolean;
+  enjeu: number;
+  ratio?: number;
+}
+
+/** Bloc « citations » d'un type de pari sur une course. */
+export interface CitationBetType {
+  betType?: string;
+  rawTypePari: string;
+  indisponible?: boolean;
+  totalPool: number;
+  runners: CitationRunner[];
+}
+
+/** Réponse « citations » normalisée d'une course (enjeux / rapports probables). */
+export interface ProviderCitations {
+  reunion: number;
+  course: number;
+  updatetime?: number;
+  betTypes: CitationBetType[];
+}
+
 export const api = {
   // Chevaux
   listHorses: () => request<Horse[]>("/api/horses"),
@@ -138,4 +165,6 @@ export const api = {
     request<ProviderProgramme>(`/api/pmu/programme?date=${date}`),
   course: (date: string, reunion: number, course: number) =>
     request<ProviderRace>(`/api/pmu/course/${date}/${reunion}/${course}`),
+  citations: (date: string, reunion: number, course: number) =>
+    request<ProviderCitations>(`/api/pmu/citations/${date}/${reunion}/${course}`),
 };

@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  type CitationBetType,
   type DutchingResult,
   type PayoutResult,
+  type ProviderCitations,
   type TicketCost,
   type ValueBetResult,
 } from "../api/client.js";
@@ -11,9 +13,15 @@ import {
   BET_TYPE_LABELS,
   BET_TYPES,
   minStakeFor,
+  trjFor,
 } from "../lib/betTypes.js";
 import { tryEvaluate } from "../lib/calc.js";
-import { refreshRace, useRacePolling, useRaceStore } from "../raceStore.js";
+import {
+  getStoredRace,
+  refreshRace,
+  useRacePolling,
+  useRaceStore,
+} from "../raceStore.js";
 
 type Tab = "ticket" | "dutching" | "valuebet" | "payout";
 
@@ -75,6 +83,52 @@ function parseNums(s: string): number[] {
   return s.split(/[,\s]+/).map((x) => Number(x.trim())).filter((n) => !Number.isNaN(n));
 }
 
+/**
+ * Charge à la volée les « citations » (enjeux / rapports probables) de la course
+ * actuellement stockée. On ne passe pas par le raceStore (données volumineuses,
+ * propres au simulateur de gains) : on lit `date`/`reunion`/`course` depuis
+ * `getStoredRace()` et on interroge l'API (cache serveur 30 s). No-op sans course.
+ */
+function useCitations(): {
+  citations: ProviderCitations | null;
+  loading: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+} {
+  const [citations, setCitations] = useState<ProviderCitations | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    const s = getStoredRace();
+    if (!s) {
+      setCitations(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      setCitations(await api.citations(s.date, s.race.reunion, s.race.course));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { citations, loading, error, reload };
+}
+
+/** Bloc citations correspondant à un BetType, disponible et non vide. */
+function citationBlockFor(
+  citations: ProviderCitations | null,
+  betType: BetType,
+): CitationBetType | undefined {
+  return citations?.betTypes.find(
+    (b) => b.betType === betType && !b.indisponible && b.runners.length > 0,
+  );
+}
+
 interface RunnerSummary {
   number: number;
   name: string;
@@ -115,8 +169,14 @@ function PayoutTab({ runners }: { runners: RunnerSummary[] }) {
   const [result, setResult] = useState<PayoutResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Citations (enjeux réels) de la course chargée, pour pré-remplir les masses.
+  const { citations, loading: citLoading, error: citError, reload: reloadCitations } =
+    useCitations();
+
   const minStake = minStakeFor(betType);
   const couple = isCouple(betType);
+  const citBlock = citationBlockFor(citations, betType);
+  const citRunners = citBlock?.runners.filter((r) => !r.scratched) ?? [];
 
   // Le Simple Placé n'existe qu'à partir de 4 partants (2 ou 3 placés payés).
   const needsRunnersCount = betType === "simple_place";
@@ -131,6 +191,19 @@ function PayoutTab({ runners }: { runners: RunnerSummary[] }) {
     if (runners.length > 0) setRunnersCount(String(runners.length));
     setSelectedRunner(null);
   }, [runners]);
+
+  // Charge les enjeux réels dès qu'on bascule en mode « masses » (et à chaque
+  // changement de course). En mode « cote » ils sont inutiles : on n'appelle pas.
+  useEffect(() => {
+    if (mode === "masses") void reloadCitations();
+  }, [mode, runners, reloadCitations]);
+
+  // Pré-remplit masse totale + enjeu du cheval depuis les citations réelles.
+  const pickCitation = (enjeu: number) => {
+    if (!citBlock) return;
+    setTotalPool(String(citBlock.totalPool));
+    setStakeOnSelection(String(enjeu));
+  };
 
   // En passant sur un Simple Placé (mode cote), on vide le rapport s'il avait été
   // pré-rempli avec une cote gagnant : celle-ci ne s'applique pas à un placé.
@@ -207,6 +280,42 @@ function PayoutTab({ runners }: { runners: RunnerSummary[] }) {
         </div>
       )}
 
+      {mode === "masses" && getStoredRace() && (
+        <div style={{ marginBottom: 14 }}>
+          <div
+            className="muted"
+            style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, marginBottom: 6 }}
+          >
+            <span>
+              {citRunners.length > 0
+                ? "Choisir un partant (remplit masse totale et enjeu depuis les données réelles PMU)"
+                : citLoading
+                  ? "Chargement des enjeux réels…"
+                  : citError
+                    ? `Enjeux PMU indisponibles : ${citError}`
+                    : "Aucun enjeu PMU pour ce type de pari (saisie manuelle possible ci-dessous)."}
+            </span>
+            <button
+              className="secondary"
+              onClick={() => void reloadCitations()}
+              disabled={citLoading}
+              style={{ whiteSpace: "nowrap" }}
+            >
+              {citLoading ? "…" : "↻ Actualiser les enjeux"}
+            </button>
+          </div>
+          {citRunners.length > 0 && (
+            <CitationPicker runners={citRunners} onPick={(r) => pickCitation(r.enjeu)} />
+          )}
+          {citRunners.length > 0 && couple && (
+            <div className="warn" style={{ marginTop: 10 }}>
+              Enjeu fourni <strong>par cheval</strong> par le PMU (pas par combinaison de 2
+              chevaux) : l'estimation du rapport couplé est donc <strong>approximative</strong>.
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="form-grid">
         <div className="field">
           <label>Type de pari</label>
@@ -272,6 +381,71 @@ function PayoutTab({ runners }: { runners: RunnerSummary[] }) {
           </div>
         </div>
       )}
+
+      {mode === "masses" && citRunners.length > 0 && (
+        <CitationTable betType={betType} block={citBlock!} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Tableau des enjeux réels par cheval, avec le ratio (% des enjeux) et le
+ * rapport probable indicatif (masse × TRJ ÷ enjeu). Trié par ratio décroissant,
+ * favori mis en évidence. Indicatif, non contractuel.
+ */
+function CitationTable({ betType, block }: { betType: BetType; block: CitationBetType }) {
+  const trj = trjFor(betType);
+  const rows = [...block.runners]
+    .filter((r) => !r.scratched)
+    .sort((a, b) => (b.ratio ?? 0) - (a.ratio ?? 0));
+
+  return (
+    <div className="result-box" style={{ marginTop: 12 }}>
+      <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+        Rapports probables (enjeux réels PMU, indicatifs et non contractuels).
+      </div>
+      <table>
+        <thead>
+          <tr><th>Partant</th><th>Enjeu</th><th>Part</th><th>Rapport probable</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const rapport = r.enjeu > 0 ? (block.totalPool * trj) / r.enjeu : 0;
+            return (
+              <tr key={r.number} style={r.favoris ? { fontWeight: 600 } : {}}>
+                <td>{r.number} — {r.name}{r.favoris ? " ★" : ""}</td>
+                <td>{r.enjeu.toLocaleString("fr-FR")}</td>
+                <td>{r.ratio != null ? `${r.ratio.toFixed(1)} %` : "—"}</td>
+                <td>{rapport >= 1 ? `${rapport.toFixed(2)} €` : "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Grille de boutons partants pour les citations (n° — nom, enjeu et ratio %).
+ * Sœur de `RunnerPicker` mais affichant l'enjeu misé au lieu de la cote.
+ */
+function CitationPicker({
+  runners,
+  onPick,
+}: {
+  runners: CitationBetType["runners"];
+  onPick: (r: CitationBetType["runners"][number]) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {runners.map((r) => (
+        <button key={r.number} className="secondary" onClick={() => onPick(r)}>
+          {r.number} — {r.name}
+          {r.ratio != null ? ` (${r.ratio.toFixed(1)} %)` : ""}
+        </button>
+      ))}
     </div>
   );
 }
@@ -524,6 +698,22 @@ function ValueBetTab({ runners }: { runners: RunnerSummary[] }) {
   // Mise minimale imposée par le type de pari (règle pmu.fr).
   const minStake = minStakeFor(betType);
 
+  // Citations (répartition des enjeux) : le ratio du marché sert de probabilité
+  // implicite « sagesse de la foule », pré-remplissable comme proba estimée.
+  const { citations, reload: reloadCitations } = useCitations();
+  const citBlock = citationBlockFor(citations, betType);
+
+  // Charge les citations quand une course est présente (proba marché disponible).
+  useEffect(() => {
+    if (getStoredRace()) void reloadCitations();
+  }, [runners, reloadCitations]);
+
+  // Ratio (%) du partant sélectionné pour le type de pari courant, si dispo.
+  const marketRatio =
+    selectedNumber != null
+      ? citBlock?.runners.find((r) => r.number === selectedNumber)?.ratio
+      : undefined;
+
   // Quand on sélectionne un partant PMU, on remplit la cote automatiquement.
   const pickRunner = (r: RunnerSummary) => {
     setSelectedNumber(r.number);
@@ -590,7 +780,20 @@ function ValueBetTab({ runners }: { runners: RunnerSummary[] }) {
         </div>
         <div className="field"><label>Cote décimale</label><input type="number" step="0.1" value={odds} onChange={(e) => setOdds(e.target.value)} /></div>
         <div className="field" style={{ position: "relative" }}>
-          <label>Proba estimée (fraction, % ou décimal)</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Proba estimée (fraction, % ou décimal)</span>
+            {marketRatio != null && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setProb(String(marketRatio / 100))}
+                title="Utiliser la part des enjeux du marché comme probabilité de départ"
+                style={{ fontSize: 11, padding: "1px 6px" }}
+              >
+                ↳ marché {marketRatio.toFixed(1)} %
+              </button>
+            )}
+          </label>
           <input
             type="text"
             value={prob}
