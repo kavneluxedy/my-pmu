@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type ProviderRace } from "../api/client.js";
 import { setRaceStore } from "../raceStore.js";
 import { setProgrammeStore, useProgrammeStore } from "../programmeStore.js";
+import { useSortable } from "../hooks/useSortable.js";
 
 type CountdownTone = "green" | "orange" | "red" | "past" | "imminent";
 
@@ -269,11 +270,12 @@ export default function ImportPmu() {
             const eligible = race.runners.filter((r) => !r.scratched && r.odds != null);
             const minOdds = eligible.length > 0 ? Math.min(...eligible.map((r) => r.odds as number)) : null;
             const favNumber = minOdds != null ? eligible.find((r) => r.odds === minOdds)?.number : null;
+            const { sorted: sortedRunners, sort, toggleSort } = useSortable(race.runners);
             return (
               <table style={{ marginTop: 16 }}>
-                <thead><tr><th>N°</th><th>Cheval</th><th>Driver/Jockey</th><th>Cote</th></tr></thead>
+                <thead><tr><th onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>N° {sort.key === 'number' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('name')} style={{ cursor: 'pointer' }}>Cheval {sort.key === 'name' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('jockey')} style={{ cursor: 'pointer' }}>Driver/Jockey {sort.key === 'jockey' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('odds')} style={{ cursor: 'pointer' }}>Cote {sort.key === 'odds' && (sort.direction === 'asc' ? '▲' : '▼')}</th></tr></thead>
                 <tbody>
-                  {race.runners.map((r) => {
+                  {sortedRunners.map((r) => {
                     const isFavPerso = favorites.has(r.number);
                     const isFavori = r.number === favNumber;
                     const rowClass = [

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Bet } from "../api/client.js";
 import { BET_TYPE_LABELS, BET_TYPES } from "../lib/betTypes.js";
+import { useSortable } from "../hooks/useSortable.js";
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -13,6 +14,7 @@ export default function Bets() {
   const [bets, setBets] = useState<Bet[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState<string | null>(null);
+  const { sorted: sortedBets, sort, toggleSort } = useSortable(bets);
 
   const reload = () => api.listBets().then(setBets).catch((e) => setError(String(e)));
   useEffect(() => {
@@ -86,10 +88,18 @@ export default function Bets() {
       <div className="panel">
         <table>
           <thead>
-            <tr><th>Date</th><th>Type</th><th>Libellé</th><th>Mise</th><th>Statut</th><th>Gain</th><th>Actions</th></tr>
+            <tr>
+              <th onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>Date {sort.key === 'date' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+              <th onClick={() => toggleSort('betType')} style={{ cursor: 'pointer' }}>Type {sort.key === 'betType' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+              <th onClick={() => toggleSort('label')} style={{ cursor: 'pointer' }}>Libellé {sort.key === 'label' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+              <th onClick={() => toggleSort('stake')} style={{ cursor: 'pointer' }}>Mise {sort.key === 'stake' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+              <th onClick={() => toggleSort('status')} style={{ cursor: 'pointer' }}>Statut {sort.key === 'status' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+              <th onClick={() => toggleSort('payout')} style={{ cursor: 'pointer' }}>Gain {sort.key === 'payout' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+              <th>Actions</th>
+            </tr>
           </thead>
           <tbody>
-            {bets.map((b) => (
+            {sortedBets.map((b) => (
               <tr key={b.id}>
                 <td>{b.date}</td>
                 <td>{b.betType}</td>

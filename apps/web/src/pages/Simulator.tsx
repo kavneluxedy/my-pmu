@@ -22,6 +22,7 @@ import {
   useRacePolling,
   useRaceStore,
 } from "../raceStore.js";
+import { useSortable } from "../hooks/useSortable.js";
 
 type Tab = "ticket" | "dutching" | "valuebet" | "payout";
 
@@ -396,9 +397,8 @@ function PayoutTab({ runners }: { runners: RunnerSummary[] }) {
  */
 function CitationTable({ betType, block }: { betType: BetType; block: CitationBetType }) {
   const trj = trjFor(betType);
-  const rows = [...block.runners]
-    .filter((r) => !r.scratched)
-    .sort((a, b) => (b.ratio ?? 0) - (a.ratio ?? 0));
+  const filtered = block.runners.filter((r) => !r.scratched);
+  const { sorted: rows, sort, toggleSort } = useSortable(filtered);
 
   return (
     <div className="result-box" style={{ marginTop: 12 }}>
@@ -407,7 +407,12 @@ function CitationTable({ betType, block }: { betType: BetType; block: CitationBe
       </div>
       <table>
         <thead>
-          <tr><th>Partant</th><th>Enjeu</th><th>Part</th><th>Rapport probable</th></tr>
+          <tr>
+            <th onClick={() => toggleSort('name')} style={{ cursor: 'pointer' }}>Partant {sort.key === 'name' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+            <th onClick={() => toggleSort('enjeu')} style={{ cursor: 'pointer' }}>Enjeu {sort.key === 'enjeu' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+            <th onClick={() => toggleSort('ratio')} style={{ cursor: 'pointer' }}>Part {sort.key === 'ratio' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+            <th>Rapport probable</th>
+          </tr>
         </thead>
         <tbody>
           {rows.map((r) => {
@@ -654,12 +659,14 @@ function DutchingTab({ runners }: { runners: RunnerSummary[] }) {
         <div className="field"><label>&nbsp;</label><button onClick={run}>Calculer</button></div>
       </div>
       {error && <p className="error">{error}</p>}
-      {result && (
+      {result && (() => {
+        const { sorted: sortedLegs, sort, toggleSort } = useSortable(result.legs);
+        return (
         <div className="result-box">
           <table>
-            <thead><tr><th>Partant</th><th>Cote</th><th>Mise</th><th>Retour si gagnant</th></tr></thead>
+            <thead><tr><th onClick={() => toggleSort('selection')} style={{ cursor: 'pointer' }}>Partant {sort.key === 'selection' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('odds')} style={{ cursor: 'pointer' }}>Cote {sort.key === 'odds' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('stake')} style={{ cursor: 'pointer' }}>Mise {sort.key === 'stake' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('grossReturn')} style={{ cursor: 'pointer' }}>Retour si gagnant {sort.key === 'grossReturn' && (sort.direction === 'asc' ? '▲' : '▼')}</th></tr></thead>
             <tbody>
-              {result.legs.map((l) => (
+              {sortedLegs.map((l) => (
                 <tr key={String(l.selection)}><td>{l.selection}</td><td>{l.odds}</td><td>{l.stake.toFixed(2)} €</td><td>{l.grossReturn.toFixed(2)} €</td></tr>
               ))}
             </tbody>
@@ -673,7 +680,8 @@ function DutchingTab({ runners }: { runners: RunnerSummary[] }) {
             ? <div className="warn" style={{ marginTop: 10 }}>Situation d'arbitrage : profit garanti positif (somme des probabilités {result.impliedProbabilitySum} &lt; 1).</div>
             : <div className="warn" style={{ marginTop: 10 }}>Pas d'arbitrage : la marge est défavorable (somme des probabilités {result.impliedProbabilitySum} ≥ 1).</div>}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

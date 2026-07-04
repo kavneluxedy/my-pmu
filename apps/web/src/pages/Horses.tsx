@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Horse } from "../api/client.js";
+import { useSortable } from "../hooks/useSortable.js";
 
 const emptyForm = {
   name: "",
@@ -15,6 +16,7 @@ export default function Horses() {
   const [horses, setHorses] = useState<Horse[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState<string | null>(null);
+  const { sorted: sortedHorses, sort, toggleSort } = useSortable(horses);
 
   const reload = () => api.listHorses().then(setHorses).catch((e) => setError(String(e)));
   useEffect(() => {
@@ -65,8 +67,17 @@ export default function Horses() {
         {error && <p className="error">{error}</p>}
       </div>
 
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span className="muted" style={{ fontSize: 13 }}>Trier par :</span>
+          <button className={sort.key === 'name' ? undefined : 'secondary'} onClick={() => toggleSort('name')} style={sort.key === 'name' ? { background: '#35c46a', color: '#0b1a10' } : {}}>Nom {sort.key === 'name' && (sort.direction === 'asc' ? '▲' : '▼')}</button>
+          <button className={sort.key === 'discipline' ? undefined : 'secondary'} onClick={() => toggleSort('discipline')} style={sort.key === 'discipline' ? { background: '#35c46a', color: '#0b1a10' } : {}}>Discipline {sort.key === 'discipline' && (sort.direction === 'asc' ? '▲' : '▼')}</button>
+          <button className={sort.key === 'age' ? undefined : 'secondary'} onClick={() => toggleSort('age')} style={sort.key === 'age' ? { background: '#35c46a', color: '#0b1a10' } : {}}>Âge {sort.key === 'age' && (sort.direction === 'asc' ? '▲' : '▼')}</button>
+        </div>
+      </div>
+
       <div className="cards">
-        {horses.map((h) => (
+        {sortedHorses.map((h) => (
           <div className="card" key={h.id}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
               <div className="value" style={{ fontSize: 18 }}>{h.name}</div>
