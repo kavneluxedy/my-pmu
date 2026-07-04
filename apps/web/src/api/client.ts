@@ -132,6 +132,21 @@ export interface ProviderCitations {
   betTypes: CitationBetType[];
 }
 
+export interface ArrivalRunner {
+  position: number;
+  number: number;
+  name?: string;
+  deadHeat?: boolean;
+}
+
+export interface Arrival {
+  reunion: number;
+  course: number;
+  ordre: ArrivalRunner[];
+  definitif: boolean;
+  updatetime?: number;
+}
+
 export const api = {
   // Chevaux
   listHorses: () => request<Horse[]>("/api/horses"),
@@ -167,4 +182,17 @@ export const api = {
     request<ProviderRace>(`/api/pmu/course/${date}/${reunion}/${course}`),
   citations: (date: string, reunion: number, course: number) =>
     request<ProviderCitations>(`/api/pmu/citations/${date}/${reunion}/${course}`),
+  arrivee: (date: string, reunion: number, course: number) =>
+    request<Arrival>(`/api/pmu/arrivee/${date}/${reunion}/${course}`),
+  setRunnerFavorite: (
+    date: string,
+    reunion: number,
+    course: number,
+    number: number,
+    isFavorite: boolean,
+  ) =>
+    request<{ success: boolean }>("/api/pmu/runner-favorite", {
+      method: "POST",
+      body: JSON.stringify({ date, reunion, course, number, isFavorite }),
+    }),
 };

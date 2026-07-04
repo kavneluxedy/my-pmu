@@ -7,6 +7,7 @@ import Bets from "./pages/Bets.js";
 import Horses from "./pages/Horses.js";
 import Simulator from "./pages/Simulator.js";
 import ImportPmu from "./pages/ImportPmu.js";
+import Arrivees from "./pages/Arrivees.js";
 import "./styles.css";
 
 const router = createBrowserRouter([
@@ -19,6 +20,7 @@ const router = createBrowserRouter([
       { path: "horses", element: <Horses /> },
       { path: "simulator", element: <Simulator /> },
       { path: "import", element: <ImportPmu /> },
+      { path: "arrivees", element: <Arrivees /> },
     ],
   },
 ]);

@@ -5,6 +5,7 @@ import {
   mapDiscipline,
   mapTypePari,
   normalizeCitationRunner,
+  normalizeArrival,
   normalizeRunner,
   toPmuDate,
 } from "./pmuTurfinfo.js";
@@ -56,6 +57,55 @@ describe("normalizeRunner", () => {
       odds: 5.2,
       scratched: false,
     });
+  });
+});
+
+describe("normalizeArrival", () => {
+  it("normalise un ordre d'arrivée simple", () => {
+    const arrival = normalizeArrival({ ordreArrivee: [[3], [7], [1]] });
+    expect(arrival.ordre).toEqual([
+      { position: 1, number: 3, deadHeat: false },
+      { position: 2, number: 7, deadHeat: false },
+      { position: 3, number: 1, deadHeat: false },
+    ]);
+    expect(arrival.definitif).toBe(true);
+  });
+
+  it("détecte un dead-heat (ex-æquo)", () => {
+    const arrival = normalizeArrival({ ordreArrivee: [[3, 5], [7]] });
+    expect(arrival.ordre).toEqual([
+      { position: 1, number: 3, deadHeat: true },
+      { position: 1, number: 5, deadHeat: true },
+      { position: 2, number: 7, deadHeat: false },
+    ]);
+    expect(arrival.definitif).toBe(true);
+  });
+
+  it("retourne un ordre vide si aucune arrivée", () => {
+    const arrival = normalizeArrival({ ordreArrivee: [] });
+    expect(arrival.ordre).toEqual([]);
+    expect(arrival.definitif).toBe(false);
+  });
+
+  it("gère les numéros encapsulés dans des objets", () => {
+    const arrival = normalizeArrival({
+      ordreArrivee: [
+        [{ numPmu: 3 }],
+        [{ numero: 7 }],
+      ],
+    });
+    expect(arrival.ordre).toEqual([
+      { position: 1, number: 3, deadHeat: false },
+      { position: 2, number: 7, deadHeat: false },
+    ]);
+  });
+
+  it("ignore les numéros invalides (0 ou négatifs)", () => {
+    const arrival = normalizeArrival({ ordreArrivee: [[3], [0], [1]] });
+    expect(arrival.ordre).toEqual([
+      { position: 1, number: 3, deadHeat: false },
+      { position: 3, number: 1, deadHeat: false },
+    ]);
   });
 });
 
