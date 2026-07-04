@@ -659,29 +659,38 @@ function DutchingTab({ runners }: { runners: RunnerSummary[] }) {
         <div className="field"><label>&nbsp;</label><button onClick={run}>Calculer</button></div>
       </div>
       {error && <p className="error">{error}</p>}
-      {result && (() => {
-        const { sorted: sortedLegs, sort, toggleSort } = useSortable(result.legs);
-        return (
-        <div className="result-box">
-          <table>
-            <thead><tr><th onClick={() => toggleSort('selection')} style={{ cursor: 'pointer' }}>Partant {sort.key === 'selection' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('odds')} style={{ cursor: 'pointer' }}>Cote {sort.key === 'odds' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('stake')} style={{ cursor: 'pointer' }}>Mise {sort.key === 'stake' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('grossReturn')} style={{ cursor: 'pointer' }}>Retour si gagnant {sort.key === 'grossReturn' && (sort.direction === 'asc' ? '▲' : '▼')}</th></tr></thead>
-            <tbody>
-              {sortedLegs.map((l) => (
-                <tr key={String(l.selection)}><td>{l.selection}</td><td>{l.odds}</td><td>{l.stake.toFixed(2)} €</td><td>{l.grossReturn.toFixed(2)} €</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ marginTop: 12 }}>
-            Mise totale : <strong>{result.totalStake.toFixed(2)} €</strong> — Retour garanti :
-            <strong> {result.guaranteedReturn.toFixed(2)} €</strong> — Profit garanti :
-            <strong className={result.guaranteedProfit >= 0 ? "" : ""} style={{ color: result.guaranteedProfit >= 0 ? "#35c46a" : "#e8556b" }}> {result.guaranteedProfit.toFixed(2)} €</strong>
-          </div>
-          {result.isArbitrage
-            ? <div className="warn" style={{ marginTop: 10 }}>Situation d'arbitrage : profit garanti positif (somme des probabilités {result.impliedProbabilitySum} &lt; 1).</div>
-            : <div className="warn" style={{ marginTop: 10 }}>Pas d'arbitrage : la marge est défavorable (somme des probabilités {result.impliedProbabilitySum} ≥ 1).</div>}
-        </div>
-        );
-      })()}
+      {result && <DutchingResultTable result={result} />}
+    </div>
+  );
+}
+
+function DutchingResultTable({ result }: { result: DutchingResult }) {
+  const { sorted: sortedLegs, sort, toggleSort } = useSortable(result.legs);
+  return (
+    <div className="result-box">
+      <table>
+        <thead>
+          <tr>
+            <th onClick={() => toggleSort('selection')} style={{ cursor: 'pointer' }}>Partant {sort.key === 'selection' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+            <th onClick={() => toggleSort('odds')} style={{ cursor: 'pointer' }}>Cote {sort.key === 'odds' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+            <th onClick={() => toggleSort('stake')} style={{ cursor: 'pointer' }}>Mise {sort.key === 'stake' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+            <th onClick={() => toggleSort('grossReturn')} style={{ cursor: 'pointer' }}>Retour si gagnant {sort.key === 'grossReturn' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedLegs.map((l) => (
+            <tr key={String(l.selection)}><td>{l.selection}</td><td>{l.odds}</td><td>{l.stake.toFixed(2)} €</td><td>{l.grossReturn.toFixed(2)} €</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ marginTop: 12 }}>
+        Mise totale : <strong>{result.totalStake.toFixed(2)} €</strong> — Retour garanti :
+        <strong> {result.guaranteedReturn.toFixed(2)} €</strong> — Profit garanti :
+        <strong style={{ color: result.guaranteedProfit >= 0 ? "#35c46a" : "#e8556b" }}> {result.guaranteedProfit.toFixed(2)} €</strong>
+      </div>
+      {result.isArbitrage
+        ? <div className="warn" style={{ marginTop: 10 }}>Situation d'arbitrage : profit garanti positif (somme des probabilités {result.impliedProbabilitySum} &lt; 1).</div>
+        : <div className="warn" style={{ marginTop: 10 }}>Pas d'arbitrage : la marge est défavorable (somme des probabilités {result.impliedProbabilitySum} ≥ 1).</div>}
     </div>
   );
 }

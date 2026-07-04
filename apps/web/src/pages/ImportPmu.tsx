@@ -266,57 +266,63 @@ export default function ImportPmu() {
               Ouvrir dans le simulateur →
             </button>
           </div>
-          {(() => {
-            const eligible = race.runners.filter((r) => !r.scratched && r.odds != null);
-            const minOdds = eligible.length > 0 ? Math.min(...eligible.map((r) => r.odds as number)) : null;
-            const favNumber = minOdds != null ? eligible.find((r) => r.odds === minOdds)?.number : null;
-            const { sorted: sortedRunners, sort, toggleSort } = useSortable(race.runners);
-            return (
-              <table style={{ marginTop: 16 }}>
-                <thead><tr><th onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>N° {sort.key === 'number' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('name')} style={{ cursor: 'pointer' }}>Cheval {sort.key === 'name' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('jockey')} style={{ cursor: 'pointer' }}>Driver/Jockey {sort.key === 'jockey' && (sort.direction === 'asc' ? '▲' : '▼')}</th><th onClick={() => toggleSort('odds')} style={{ cursor: 'pointer' }}>Cote {sort.key === 'odds' && (sort.direction === 'asc' ? '▲' : '▼')}</th></tr></thead>
-                <tbody>
-                  {sortedRunners.map((r) => {
-                    const isFavPerso = favorites.has(r.number);
-                    const isFavori = r.number === favNumber;
-                    const rowClass = [
-                      r.scratched ? "runner-scratched" : "",
-                      isFavPerso ? "runner-fav-perso" : isFavori ? "runner-favori" : "",
-                    ].filter(Boolean).join(" ") || undefined;
-                    return (
-                      <tr
-                        key={r.number}
-                        className={rowClass}
-                        style={{ cursor: "pointer" }}
-                        onClick={() => {
-                          if (r.scratched) return;
-                          setFavorites((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(r.number)) next.delete(r.number);
-                            else next.add(r.number);
-                            return next;
-                          });
-                        }}
-                      >
-                        <td>
-                          <span className="runner-num">
-                            <span className="runner-num-val">{r.number}</span>
-                            <span className="runner-badge">
-                              {isFavPerso ? "★" : isFavori ? "F" : ""}
-                            </span>
-                          </span>
-                        </td>
-                        <td>{r.name}{r.scratched ? " (NP)" : ""}</td>
-                        <td>{r.jockey ?? "—"}</td>
-                        <td>{r.odds != null ? r.odds.toFixed(1) : "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            );
-          })()}
+          <RunnersTable runners={race.runners} favorites={favorites} onToggleFavorite={(num) => setFavorites((prev) => { const next = new Set(prev); if (next.has(num)) next.delete(num); else next.add(num); return next; })} />
         </div>
       )}
     </div>
+  );
+}
+
+type Runner = ProviderRace["runners"][number];
+
+function RunnersTable({ runners, favorites, onToggleFavorite }: {
+  runners: Runner[];
+  favorites: Set<number>;
+  onToggleFavorite: (num: number) => void;
+}) {
+  const eligible = runners.filter((r) => !r.scratched && r.odds != null);
+  const minOdds = eligible.length > 0 ? Math.min(...eligible.map((r) => r.odds as number)) : null;
+  const favNumber = minOdds != null ? eligible.find((r) => r.odds === minOdds)?.number : null;
+  const { sorted: sortedRunners, sort, toggleSort } = useSortable(runners);
+
+  return (
+    <table style={{ marginTop: 16 }}>
+      <thead>
+        <tr>
+          <th onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>N° {sort.key === 'number' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+          <th onClick={() => toggleSort('name')} style={{ cursor: 'pointer' }}>Cheval {sort.key === 'name' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+          <th onClick={() => toggleSort('jockey')} style={{ cursor: 'pointer' }}>Driver/Jockey {sort.key === 'jockey' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+          <th onClick={() => toggleSort('odds')} style={{ cursor: 'pointer' }}>Cote {sort.key === 'odds' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sortedRunners.map((r) => {
+          const isFavPerso = favorites.has(r.number);
+          const isFavori = r.number === favNumber;
+          const rowClass = [
+            r.scratched ? "runner-scratched" : "",
+            isFavPerso ? "runner-fav-perso" : isFavori ? "runner-favori" : "",
+          ].filter(Boolean).join(" ") || undefined;
+          return (
+            <tr
+              key={r.number}
+              className={rowClass}
+              style={{ cursor: "pointer" }}
+              onClick={() => { if (!r.scratched) onToggleFavorite(r.number); }}
+            >
+              <td>
+                <span className="runner-num">
+                  <span className="runner-num-val">{r.number}</span>
+                  <span className="runner-badge">{isFavPerso ? "★" : isFavori ? "F" : ""}</span>
+                </span>
+              </td>
+              <td>{r.name}{r.scratched ? " (NP)" : ""}</td>
+              <td>{r.jockey ?? "—"}</td>
+              <td>{r.odds != null ? r.odds.toFixed(1) : "—"}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
