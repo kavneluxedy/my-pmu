@@ -1,5 +1,6 @@
 /** Jeu de données de démonstration : quelques chevaux, paris et transactions. */
 import { PrismaClient } from "@prisma/client";
+import process from "node:process";
 
 const prisma = new PrismaClient();
 
@@ -42,7 +43,7 @@ async function main() {
   console.log("Seed terminé.");
 }
 
-main()
+await main()
   .catch((e) => {
     console.error(e);
     process.exit(1);
