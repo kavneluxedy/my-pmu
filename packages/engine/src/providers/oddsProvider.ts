@@ -68,6 +68,8 @@ export interface OddsProvider {
   getRace(dateISO: string, reunion: number, course: number): Promise<ProviderRace>;
   /** Récupère l'ordre d'arrivée définitif d'une course. */
   getArrival(dateISO: string, reunion: number, course: number): Promise<ProviderArrival>;
+  /** Récupère les rapports probables placés de chaque partant (E_SIMPLE_PLACE). */
+  getPlaceReports(dateISO: string, reunion: number, course: number): Promise<ProviderPlaceReports>;
 }
 
 /**
@@ -117,4 +119,22 @@ export interface ProviderCitations {
   /** Horodatage (epoch ms) de la dernière mise à jour PMU, si disponible. */
   updatetime?: number;
   betTypes: CitationBetType[];
+}
+
+/**
+ * Rapport probable placé pour 1 € d'un cheval (endpoint rapports/E_SIMPLE_PLACE).
+ * Le PMU fournit une fourchette min/max (le rapport placé dépend des autres
+ * chevaux placés) ; on conserve les deux bornes pour laisser l'utilisateur choisir.
+ */
+export interface PlaceReport {
+  number: number;
+  minRapport: number;
+  maxRapport: number;
+}
+
+/** Rapports probables placés de tous les partants d'une course. */
+export interface ProviderPlaceReports {
+  reunion: number;
+  course: number;
+  runners: PlaceReport[];
 }

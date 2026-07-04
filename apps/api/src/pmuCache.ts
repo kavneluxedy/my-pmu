@@ -6,6 +6,7 @@ import {
   PmuTurfinfoProvider,
   type ProviderArrival,
   type ProviderCitations,
+  type ProviderPlaceReports,
   type ProviderProgramme,
   type ProviderRace,
 } from "@pmu/engine";
@@ -27,6 +28,8 @@ const TTL_RACE_MS = 1000 * 30; // 30 s
 const TTL_CITATIONS_MS = 1000 * 30; // 30 s
 // L'arrivée d'une course est définitive et stable une fois connue : cache long.
 const TTL_ARRIVAL_MS = 1000 * 60 * 60; // 1 heure
+// Les rapports probables (place) changent en direct : cache court.
+const TTL_PLACE_REPORTS_MS = 1000 * 30; // 30 s
 
 async function readCache<T>(cacheKey: string, ttlMs: number): Promise<T | null> {
   const row = await prisma.rawPmuSnapshot.findUnique({ where: { cacheKey } });
@@ -88,6 +91,19 @@ export async function getArrival(
   const cached = await readCache<ProviderArrival>(key, TTL_ARRIVAL_MS);
   if (cached) return cached;
   const fresh = await provider.getArrival(dateISO, reunion, course);
+  await writeCache(key, fresh);
+  return fresh;
+}
+
+export async function getPlaceReports(
+  dateISO: string,
+  reunion: number,
+  course: number,
+): Promise<ProviderPlaceReports> {
+  const key = `place-reports:${dateISO}:${reunion}:${course}`;
+  const cached = await readCache<ProviderPlaceReports>(key, TTL_PLACE_REPORTS_MS);
+  if (cached) return cached;
+  const fresh = await provider.getPlaceReports(dateISO, reunion, course);
   await writeCache(key, fresh);
   return fresh;
 }

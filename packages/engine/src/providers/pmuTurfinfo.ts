@@ -19,9 +19,11 @@ import type {
   CitationBetType,
   CitationRunner,
   OddsProvider,
+  PlaceReport,
   ProviderArrival,
   ProviderArrivalRunner,
   ProviderCitations,
+  ProviderPlaceReports,
   ProviderProgramme,
   ProviderRace,
   ProviderRunner,
@@ -210,6 +212,34 @@ export class PmuTurfinfoProvider implements OddsProvider {
       course,
       runners: participants.map(normalizeRunner),
     };
+  }
+
+  /**
+   * Récupère les rapports probables placés pour 1 € de chaque partant via
+   * l'endpoint rapports/E_SIMPLE_PLACE. Permet le pré-remplissage automatique
+   * du champ rapport dans le simulateur de gains (mode « cote », Simple Placé).
+   */
+  async getPlaceReports(
+    dateISO: string,
+    reunion: number,
+    course: number,
+  ): Promise<ProviderPlaceReports> {
+    const pmuDate = toPmuDate(dateISO);
+    const data = (await this.getJson(
+      `/programme/${pmuDate}/R${reunion}/C${course}/rapports/E_SIMPLE_PLACE`,
+    )) as { rapportsParticipant?: Array<Record<string, unknown>> };
+    const liste = data.rapportsParticipant ?? [];
+    const runners: PlaceReport[] = liste
+      .map((r) => {
+        const numPmu = Number(r.numPmu ?? 0);
+        const min = r.minRapportProbable;
+        const max = r.maxRapportProbable;
+        if (!numPmu || r.statut === "NON_PARTANT") return null;
+        if (typeof min !== "number" || typeof max !== "number") return null;
+        return { number: numPmu, minRapport: min, maxRapport: max };
+      })
+      .filter((r): r is PlaceReport => r !== null);
+    return { reunion, course, runners };
   }
 
   /**

@@ -52,19 +52,19 @@ function buildResult(
   betType: BetType,
   mode: PayoutMode,
   unitStake: number,
-  rapportBrutBrut: number,
+  rapportBrut: number,
 ): PayoutResult {
-  const rapportBrut = roundDecime(Math.max(rapportBrutBrut, RAPPORT_MINIMUM));
-  const grossPayout = round2(unitStake * rapportBrut);
+  const rapportBrutArrondi = roundDecime(Math.max(rapportBrut, RAPPORT_MINIMUM));
+  const grossPayout = round2(unitStake * rapportBrutArrondi);
   return {
     betType,
     mode,
-    rapportNetPourUnEuro: round2(rapportBrut - 1),
-    rapportBrutPourUnEuro: rapportBrut,
+    rapportNetPourUnEuro: round2(rapportBrutArrondi - 1),
+    rapportBrutPourUnEuro: rapportBrutArrondi,
     stake: unitStake,
     grossPayout,
     netProfit: round2(grossPayout - unitStake),
-    returnOnStake: rapportBrut,
+    returnOnStake: rapportBrutArrondi,
   };
 }
 

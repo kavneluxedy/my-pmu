@@ -147,6 +147,20 @@ export interface Arrival {
   updatetime?: number;
 }
 
+/** Rapport probable placé pour 1 € d'un partant (fourchette min/max PMU). */
+export interface PlaceReport {
+  number: number;
+  minRapport: number;
+  maxRapport: number;
+}
+
+/** Rapports probables placés de tous les partants (E_SIMPLE_PLACE). */
+export interface ProviderPlaceReports {
+  reunion: number;
+  course: number;
+  runners: PlaceReport[];
+}
+
 export const api = {
   // Chevaux
   listHorses: () => request<Horse[]>("/api/horses"),
@@ -195,4 +209,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ date, reunion, course, number, isFavorite }),
     }),
+  placeReports: (date: string, reunion: number, course: number) =>
+    request<ProviderPlaceReports>(`/api/pmu/place-reports/${date}/${reunion}/${course}`),
 };

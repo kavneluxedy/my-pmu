@@ -22,7 +22,7 @@ interface StoredRace {
 export function setRaceStore(race: ProviderRace, date: string): void {
   const stored: StoredRace = { date, race };
   sessionStorage.setItem("pmu_race", JSON.stringify(stored));
-  window.dispatchEvent(new CustomEvent(EVENT));
+  globalThis.dispatchEvent(new CustomEvent(EVENT));
 }
 
 /** Lit la course stockée avec sa date (null si absente). */
@@ -41,8 +41,8 @@ export function useRaceStore(): ProviderRace | null {
   const [race, setRace] = useState<ProviderRace | null>(getRaceStore);
   useEffect(() => {
     const handler = () => setRace(getRaceStore());
-    window.addEventListener(EVENT, handler);
-    return () => window.removeEventListener(EVENT, handler);
+    globalThis.addEventListener(EVENT, handler);
+    return () => globalThis.removeEventListener(EVENT, handler);
   }, []);
   return race;
 }
@@ -63,7 +63,7 @@ export async function refreshRace(): Promise<ProviderRace | null> {
 }
 
 /** Intervalle de resynchronisation des cotes de la course (ms). */
-const RACE_REFRESH_MS = 60_000;
+const RACE_REFRESH_MS = 30_000;
 
 /**
  * Rafraîchit périodiquement la course chargée en tâche de fond, sans spinner.

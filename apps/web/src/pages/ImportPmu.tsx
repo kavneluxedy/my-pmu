@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type ProviderRace } from "../api/client.js";
-import { setRaceStore } from "../raceStore.js";
-import { setProgrammeStore, useProgrammeStore } from "../programmeStore.js";
 import { useSortable } from "../hooks/useSortable.js";
+import { setProgrammeStore, useProgrammeStore } from "../programmeStore.js";
+import { setRaceStore } from "../raceStore.js";
 
 type CountdownTone = "green" | "orange" | "red" | "past" | "imminent";
 
@@ -275,14 +275,14 @@ export default function ImportPmu() {
 
 type Runner = ProviderRace["runners"][number];
 
-function RunnersTable({ runners, favorites, onToggleFavorite }: {
+function RunnersTable({ runners, favorites, onToggleFavorite }: Readonly<{
   runners: Runner[];
   favorites: Set<number>;
   onToggleFavorite: (num: number) => void;
-}) {
+}>) {
   const eligible = runners.filter((r) => !r.scratched && r.odds != null);
   const minOdds = eligible.length > 0 ? Math.min(...eligible.map((r) => r.odds as number)) : null;
-  const favNumber = minOdds != null ? eligible.find((r) => r.odds === minOdds)?.number : null;
+  const favNumber = minOdds == null ? null : eligible.find((r) => r.odds === minOdds)?.number;
   const { sorted: sortedRunners, sort, toggleSort } = useSortable(runners);
 
   return (
@@ -318,7 +318,7 @@ function RunnersTable({ runners, favorites, onToggleFavorite }: {
               </td>
               <td>{r.name}{r.scratched ? " (NP)" : ""}</td>
               <td>{r.jockey ?? "—"}</td>
-              <td>{r.odds != null ? r.odds.toFixed(1) : "—"}</td>
+              <td>{r.odds == null ? "—" : r.odds.toFixed(1)}</td>
             </tr>
           );
         })}
