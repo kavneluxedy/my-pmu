@@ -10,7 +10,6 @@ const horseSchema = z.object({
   usualDriver: z.string().optional(),
   favHippodrome: z.string().optional(),
   notes: z.string().optional(),
-  isFavorite: z.boolean().optional(),
 });
 
 export async function horseRoutes(app: FastifyInstance): Promise<void> {

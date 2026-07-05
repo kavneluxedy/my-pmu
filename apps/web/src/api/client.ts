@@ -22,7 +22,6 @@ export interface Horse {
   usualDriver?: string | null;
   favHippodrome?: string | null;
   notes?: string | null;
-  isFavorite: boolean;
 }
 
 export interface Bet {
@@ -137,6 +136,8 @@ export interface ArrivalRunner {
   number: number;
   name?: string;
   deadHeat?: boolean;
+  /** Indique si ce cheval est dans « Mes chevaux ». */
+  inFavorites?: boolean;
 }
 
 export interface Arrival {
@@ -167,6 +168,16 @@ export const api = {
   createHorse: (data: Partial<Horse>) =>
     request<Horse>("/api/horses", { method: "POST", body: JSON.stringify(data) }),
   deleteHorse: (id: number) => request<void>(`/api/horses/${id}`, { method: "DELETE" }),
+  /** Ajoute (ou retire) un cheval de « Mes chevaux » depuis les Arrivées, par nom. */
+  setArrivalFavorite: (
+    name: string,
+    add: boolean,
+    ctx?: { date: string; reunion: number; course: number },
+  ) =>
+    request<{ success: boolean }>("/api/pmu/arrival-favorite", {
+      method: "POST",
+      body: JSON.stringify({ name, add, ...ctx }),
+    }),
 
   // Paris
   listBets: () => request<Bet[]>("/api/bets"),
@@ -198,17 +209,6 @@ export const api = {
     request<ProviderCitations>(`/api/pmu/citations/${date}/${reunion}/${course}`),
   arrivee: (date: string, reunion: number, course: number) =>
     request<Arrival>(`/api/pmu/arrivee/${date}/${reunion}/${course}`),
-  setRunnerFavorite: (
-    date: string,
-    reunion: number,
-    course: number,
-    number: number,
-    isFavorite: boolean,
-  ) =>
-    request<{ success: boolean }>("/api/pmu/runner-favorite", {
-      method: "POST",
-      body: JSON.stringify({ date, reunion, course, number, isFavorite }),
-    }),
   placeReports: (date: string, reunion: number, course: number) =>
     request<ProviderPlaceReports>(`/api/pmu/place-reports/${date}/${reunion}/${course}`),
 };

@@ -51,14 +51,16 @@ export default function Arrivees() {
   };
 
   const toggleRunnerFavorite = async (
-    reunion: number,
-    course: number,
-    runnerNumber: number,
+    runnerName: string,
     currentFavorite: boolean,
   ) => {
     setError(null);
     try {
-      await api.setRunnerFavorite(date, reunion, course, runnerNumber, !currentFavorite);
+      await api.setArrivalFavorite(
+        runnerName,
+        !currentFavorite,
+        selectedReunion && selectedCourse ? { date, reunion: selectedReunion, course: selectedCourse } : undefined,
+      );
       // Rechargement de l'arrivée après changement du favori.
       if (selectedReunion && selectedCourse) {
         const data = await api.arrivee(date, selectedReunion, selectedCourse);
@@ -157,9 +159,9 @@ export default function Arrivees() {
                       <td>
                         <button
                           className="icon-btn"
-                          onClick={() => toggleRunnerFavorite(arrival.reunion, arrival.course, runner.number, false)}
-                          title="Marquer comme favori"
-                          style={{ cursor: "pointer", padding: "4px 8px" }}
+                          onClick={() => toggleRunnerFavorite(runner.name ?? "", runner.inFavorites ?? false)}
+                          title={runner.inFavorites ? "Retirer des favoris" : "Marquer comme favori"}
+                          style={{ cursor: "pointer", padding: "4px 8px", opacity: runner.inFavorites ? 1 : 0.5 }}
                         >
                           ★
                         </button>
