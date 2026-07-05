@@ -109,6 +109,66 @@ describe("normalizeArrival", () => {
   });
 });
 
+describe("normalizeArrival — format tableau rapports PMU", () => {
+  it("extrait l'ordre depuis QUINTE_PLUS si disponible", () => {
+    const arrival = normalizeArrival([
+      { typePari: "SIMPLE_GAGNANT", rapports: [{ combinaison: "6" }] },
+      { typePari: "TRIO", rapports: [{ combinaison: "6-2-4" }] },
+      { typePari: "QUINTE_PLUS", rapports: [{ combinaison: "6-2-4-1-5" }] },
+    ]);
+    expect(arrival.ordre).toEqual([
+      { position: 1, number: 6, deadHeat: false },
+      { position: 2, number: 2, deadHeat: false },
+      { position: 3, number: 4, deadHeat: false },
+      { position: 4, number: 1, deadHeat: false },
+      { position: 5, number: 5, deadHeat: false },
+    ]);
+    expect(arrival.definitif).toBe(true);
+  });
+
+  it("utilise SUPER_QUATRE (4 chevaux) en priorité sur TRIO", () => {
+    const arrival = normalizeArrival([
+      { typePari: "SIMPLE_GAGNANT", rapports: [{ combinaison: "3" }] },
+      { typePari: "TRIO", rapports: [{ combinaison: "3-7-1" }] },
+      { typePari: "SUPER_QUATRE", rapports: [{ combinaison: "3-7-1-8" }] },
+    ]);
+    expect(arrival.ordre).toEqual([
+      { position: 1, number: 3, deadHeat: false },
+      { position: 2, number: 7, deadHeat: false },
+      { position: 3, number: 1, deadHeat: false },
+      { position: 4, number: 8, deadHeat: false },
+    ]);
+    expect(arrival.definitif).toBe(true);
+  });
+
+  it("fallback sur TRIO si pas de SUPER_QUATRE", () => {
+    const arrival = normalizeArrival([
+      { typePari: "SIMPLE_GAGNANT", rapports: [{ combinaison: "3" }] },
+      { typePari: "TRIO", rapports: [{ combinaison: "3-7-1" }] },
+    ]);
+    expect(arrival.ordre).toEqual([
+      { position: 1, number: 3, deadHeat: false },
+      { position: 2, number: 7, deadHeat: false },
+      { position: 3, number: 1, deadHeat: false },
+    ]);
+    expect(arrival.definitif).toBe(true);
+  });
+
+  it("fallback sur SIMPLE_GAGNANT si seulement lui", () => {
+    const arrival = normalizeArrival([
+      { typePari: "SIMPLE_GAGNANT", rapports: [{ combinaison: "4" }] },
+    ]);
+    expect(arrival.ordre).toEqual([{ position: 1, number: 4, deadHeat: false }]);
+    expect(arrival.definitif).toBe(true);
+  });
+
+  it("retourne vide si aucun rapport exploitable", () => {
+    const arrival = normalizeArrival([{ typePari: "INCONNU", rapports: [] }]);
+    expect(arrival.ordre).toEqual([]);
+    expect(arrival.definitif).toBe(false);
+  });
+});
+
 describe("PmuTurfinfoProvider", () => {
   it("parse le programme via un fetch injecté", async () => {
     const fakeFetch = async () => ({

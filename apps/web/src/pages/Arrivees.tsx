@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type Arrival } from "../api/client.js";
 import { useProgrammeStore } from "../programmeStore.js";
+import { CountdownPill, countdownStatus } from "../components/CountdownPill.js";
 
 export default function Arrivees() {
   const programme = useProgrammeStore();
@@ -10,6 +11,12 @@ export default function Arrivees() {
   const [arrival, setArrival] = useState<Arrival | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const loadArrival = async (reunion: number, course: number) => {
     setError(null);
@@ -64,6 +71,16 @@ export default function Arrivees() {
       </div>
 
       {programme && (() => {
+        let nextKey: string | null = null;
+        let nextTs = Infinity;
+        for (const m of programme.meetings) {
+          for (const c of m.races) {
+            if (c.startTime != null && c.startTime > now && c.startTime < nextTs) {
+              nextTs = c.startTime;
+              nextKey = `${m.reunion}-${c.course}`;
+            }
+          }
+        }
         return (
           <div className="panel">
             <h3>Programme du {programme.date}</h3>
@@ -72,22 +89,34 @@ export default function Arrivees() {
               <div key={m.reunion} style={{ marginBottom: 16 }}>
                 <strong>R{m.reunion} — {m.hippodrome}</strong>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                  {m.races.map((c) => (
-                    <button
-                      key={c.course}
-                      className={`secondary${selectedReunion === m.reunion && selectedCourse === c.course ? " active" : ""}`}
-                      onClick={() => loadArrival(m.reunion, c.course)}
-                      disabled={loading}
-                      style={selectedReunion === m.reunion && selectedCourse === c.course ? {
-                        border: "2px solid var(--accent-2)",
-                        background: "rgba(240,169,59,0.12)",
-                        color: "var(--text)",
-                        fontWeight: 700,
-                      } : undefined}
-                    >
-                      C{c.course}{c.discipline ? ` · ${c.discipline}` : ""}
-                    </button>
-                  ))}
+                  {m.races.map((c) => {
+                    const isSelected = selectedReunion === m.reunion && selectedCourse === c.course;
+                    const isNext = `${m.reunion}-${c.course}` === nextKey;
+                    const status = countdownStatus(c.startTime, now, c.departImminent);
+                    return (
+                      <button
+                        key={c.course}
+                        className={`secondary${isSelected ? " active" : ""}`}
+                        onClick={() => loadArrival(m.reunion, c.course)}
+                        disabled={loading}
+                        style={isSelected ? {
+                          border: "2px solid var(--accent-2)",
+                          background: "rgba(240,169,59,0.12)",
+                          color: "var(--text)",
+                          fontWeight: 700,
+                        } : isNext ? {
+                          border: "2px solid var(--accent-2)",
+                          background: "rgba(240,169,59,0.12)",
+                          color: "var(--text)",
+                          fontWeight: 700,
+                        } : undefined}
+                      >
+                        {isNext && !isSelected && <span style={{ marginRight: 4 }}>▶</span>}
+                        C{c.course}{c.discipline ? ` · ${c.discipline}` : ""}
+                        {status && <CountdownPill status={status} />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}

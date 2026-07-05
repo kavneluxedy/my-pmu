@@ -21,7 +21,7 @@ const provider = new PmuTurfinfoProvider();
  */
 const TTL_PROGRAMME_MS = 1000 * 30; // 30 s
 // Les cotes des partants bougent jusqu'au départ ; on garde le cache court pour
-// que le polling du simulateur (~60 s) obtienne des cotes réellement fraîches.
+// que le polling du simulateur (~30 s) obtienne des cotes réellement fraîches.
 const TTL_RACE_MS = 1000 * 30; // 30 s
 // Les enjeux (« citations ») bougent en direct au même rythme que les cotes ;
 // on garde un cache court pour des rapports probables réellement frais.
@@ -91,7 +91,7 @@ export async function getArrival(
   const cached = await readCache<ProviderArrival>(key, TTL_ARRIVAL_MS);
   if (cached) return cached;
   const fresh = await provider.getArrival(dateISO, reunion, course);
-  await writeCache(key, fresh);
+  if (fresh.definitif) await writeCache(key, fresh);
   return fresh;
 }
 
