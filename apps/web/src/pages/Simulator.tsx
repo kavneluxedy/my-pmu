@@ -64,7 +64,9 @@ export default function Simulator() {
       {tab === "payout" && <PayoutTab runners={runners} />}
     </div>
   );
-  function TicketTab({ runners }: { runners: RunnerSummary[] }) {
+}
+
+function TicketTab({ runners }: { runners: RunnerSummary[] }) {
     const [betType, setBetType] = useState("tierce");
     const [bases, setBases] = useState("");
     const [associated, setAssociated] = useState(() =>
@@ -422,7 +424,6 @@ export default function Simulator() {
         )}
       </div>
     );
-  }
 }
 
 /**
