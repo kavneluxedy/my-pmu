@@ -132,3 +132,8 @@ export function tryEvaluate(input: string): number | null {
     return null;
   }
 }
+
+/** Parse une liste de nombres séparés par virgules/espaces, en ignorant les entrées non numériques. */
+export function parseNums(s: string): number[] {
+  return s.split(/[,\s]+/).map((x) => Number(x.trim())).filter((n) => !Number.isNaN(n));
+}

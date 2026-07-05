@@ -5,7 +5,7 @@ import RunnerPicker from "../components/RunnerPicker.js";
 import { useCitations } from "../hooks/useCitations.js";
 import { useSortable } from "../hooks/useSortable.js";
 import { BET_TYPE_LABELS, BET_TYPES, BetType, minStakeFor } from "../lib/betTypes.js";
-import { tryEvaluate } from "../lib/calc.js";
+import { parseNums, tryEvaluate } from "../lib/calc.js";
 import { citationBlockFor } from "../lib/citation.js";
 import { RunnerSummary } from "../lib/runner.js";
 import { getStoredRace, useRacePolling, useRaceStore } from "../raceStore.js";

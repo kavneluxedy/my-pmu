@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluate, tryEvaluate } from "./calc.js";
+import { evaluate, parseNums, tryEvaluate } from "./calc.js";
 
 describe("evaluate — nombres et décimaux", () => {
   it("évalue un entier", () => {
@@ -95,5 +95,23 @@ describe("tryEvaluate", () => {
     expect(tryEvaluate("1/0")).toBeNull();
     expect(tryEvaluate("(1+")).toBeNull();
     expect(tryEvaluate("abc")).toBeNull();
+  });
+});
+
+describe("parseNums", () => {
+  it("parse une liste séparée par des virgules", () => {
+    expect(parseNums("1,2,3")).toEqual([1, 2, 3]);
+  });
+  it("gère les mélanges de virgules et d'espaces", () => {
+    expect(parseNums("2, 4  6")).toEqual([2, 4, 6]);
+  });
+  it("parse les décimaux", () => {
+    expect(parseNums("2.5, 4")).toEqual([2.5, 4]);
+  });
+  it("ignore les entrées non numériques", () => {
+    expect(parseNums("1, abc, 3")).toEqual([1, 3]);
+  });
+  it("ignore un tronçon vide entre deux séparateurs", () => {
+    expect(parseNums("1,,3")).toEqual([1, 3]);
   });
 });
