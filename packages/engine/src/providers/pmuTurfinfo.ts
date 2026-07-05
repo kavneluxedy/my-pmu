@@ -118,10 +118,16 @@ export function normalizeRunner(raw: Record<string, unknown>): ProviderRunner {
     number: Number(raw.numPmu ?? raw.numero ?? 0),
     name: String(raw.nom ?? ""),
     odds: extractOdds(raw),
-    jockey: raw.driver ? String(raw.driver) : raw.jockey ? String(raw.jockey) : undefined,
+    jockey: extractJockey(),
     trainer: raw.entraineur ? String(raw.entraineur) : undefined,
     scratched: raw.statut === "NON_PARTANT",
   };
+
+  function extractJockey(): string | undefined {
+    if (raw.driver) return String(raw.driver);
+    if (raw.jockey) return String(raw.jockey);
+    return undefined;
+  }
 }
 
 interface RapportPari {
