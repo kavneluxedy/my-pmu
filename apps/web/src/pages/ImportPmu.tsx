@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type ProviderRace } from "../api/client.js";
+import { CountdownPill } from "../components/CountdownPill.js";
+import { useAppClock } from "../hooks/useAppClock.js";
 import { useSortable } from "../hooks/useSortable.js";
+import { countdownStatus } from "../lib/time.js";
 import { setProgrammeStore, useProgrammeStore } from "../programmeStore.js";
 import { setRaceStore } from "../raceStore.js";
-import { CountdownPill, countdownStatus } from "../components/CountdownPill.js";
 
 export default function ImportPmu() {
   const navigate = useNavigate();
@@ -18,13 +20,8 @@ export default function ImportPmu() {
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  const now = useAppClock();
   const autoLoadedRef = useRef(false);
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     const reunion = Number(searchParams.get("reunion"));

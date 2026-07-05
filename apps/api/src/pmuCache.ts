@@ -26,8 +26,9 @@ const TTL_RACE_MS = 1000 * 30; // 30 s
 // Les enjeux (« citations ») bougent en direct au même rythme que les cotes ;
 // on garde un cache court pour des rapports probables réellement frais.
 const TTL_CITATIONS_MS = 1000 * 30; // 30 s
-// L'arrivée d'une course est définitive et stable une fois connue : cache long.
-const TTL_ARRIVAL_MS = 1000 * 60 * 60; // 1 heure
+// L'arrivée d'une course : définitive = cache long (1h), provisional = cache court (30s).
+const TTL_ARRIVAL_DEFINITIVE_MS = 1000 * 60 * 60; // 1 heure
+const TTL_ARRIVAL_PROVISIONAL_MS = 1000 * 30; // 30 s
 // Les rapports probables (place) changent en direct : cache court.
 const TTL_PLACE_REPORTS_MS = 1000 * 30; // 30 s
 
@@ -38,7 +39,7 @@ async function readCache<T>(cacheKey: string, ttlMs: number): Promise<T | null> 
   return JSON.parse(row.payload) as T;
 }
 
-async function writeCache(cacheKey: string, payload: unknown): Promise<void> {
+async function writeCache(cacheKey: string, payload: unknown, ttlMs?: number): Promise<void> {
   const serialized = JSON.stringify(payload);
   await prisma.rawPmuSnapshot.upsert({
     where: { cacheKey },
@@ -88,10 +89,10 @@ export async function getArrival(
   course: number,
 ): Promise<ProviderArrival> {
   const key = `arrivee:${dateISO}:${reunion}:${course}`;
-  const cached = await readCache<ProviderArrival>(key, TTL_ARRIVAL_MS);
+  const cached = await readCache<ProviderArrival>(key, TTL_ARRIVAL_DEFINITIVE_MS);
   if (cached) return cached;
   const fresh = await provider.getArrival(dateISO, reunion, course);
-  if (fresh.definitif) await writeCache(key, fresh);
+  await writeCache(key, fresh);
   return fresh;
 }
 
