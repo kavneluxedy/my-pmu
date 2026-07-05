@@ -124,6 +124,36 @@ export function normalizeRunner(raw: Record<string, unknown>): ProviderRunner {
   };
 }
 
+interface RapportPari {
+  typePari: string;
+  rapports?: Array<{ combinaison?: string }>;
+}
+
+function normalizeArrivalFromRapports(rapports: RapportPari[]): ProviderArrival {
+  // Noms réels renvoyés par l'API rapports-definitifs, du plus informatif au moins.
+  const PRIORITY = [
+    "QUINTE_PLUS", "QUARTE_PLUS",            // courses avec Quinté/Quarté (rare)
+    "SUPER_QUATRE",                            // 4 chevaux (format habituel)
+    "TIERCE", "TRIO_ORDRE", "TRIO",            // 3 chevaux
+    "COUPLE_ORDRE", "COUPLE_GAGNANT",          // 2 chevaux
+    "SIMPLE_GAGNANT", "SIMPLE_GAGNANT_INTERNATIONAL",
+  ];
+  for (const typePari of PRIORITY) {
+    const bloc = rapports.find(r => r.typePari === typePari);
+    const combinaison = bloc?.rapports?.[0]?.combinaison;
+    if (!combinaison) continue;
+    const nums = combinaison.split("-").map(Number).filter(n => n > 0);
+    if (nums.length === 0) continue;
+    const ordre: ProviderArrivalRunner[] = nums.map((num, idx) => ({
+      position: idx + 1,
+      number: num,
+      deadHeat: false,
+    }));
+    return { reunion: 0, course: 0, ordre, definitif: true };
+  }
+  return { reunion: 0, course: 0, ordre: [], definitif: false };
+}
+
 /**
  * Normalise l'ordre d'arrivée brut du PMU vers ProviderArrival.
  * Le champ `ordreArrivee` du PMU est typiquement un Array<Array<number>> :
@@ -131,8 +161,12 @@ export function normalizeRunner(raw: Record<string, unknown>): ProviderRunner {
  * - un sous-tableau à plusieurs entrées = dead-heat/ex-æquo
  * Cherche dans raw.ordreArrivee, puis raw.rapportsDefinitifs si absent.
  */
-export function normalizeArrival(raw: Record<string, unknown>): ProviderArrival {
-  const ordreBrut = (raw.ordreArrivee as unknown[]) ?? (raw.rapportsDefinitifs as unknown[]) ?? [];
+export function normalizeArrival(raw: unknown): ProviderArrival {
+  if (Array.isArray(raw)) {
+    return normalizeArrivalFromRapports(raw as RapportPari[]);
+  }
+  const obj = raw as Record<string, unknown>;
+  const ordreBrut = (obj.ordreArrivee as unknown[]) ?? (obj.rapportsDefinitifs as unknown[]) ?? [];
   const ordre: ProviderArrivalRunner[] = [];
   ordreBrut.forEach((group, idx) => {
     const nums = Array.isArray(group) ? group : [group];
@@ -159,7 +193,7 @@ export class PmuTurfinfoProvider implements OddsProvider {
     } else if (typeof globalFetch === "function") {
       this.fetchImpl = ((url: string) => (globalFetch as (u: string) => unknown)(url)) as unknown as FetchLike;
     } else {
-      throw new Error("Aucune implémentation de fetch disponible (fournissez fetchImpl).");
+      throw new TypeError("Aucune implémentation de fetch disponible (fournissez fetchImpl).");
     }
     this.baseUrl = options.baseUrl ?? BASE_URL;
   }
@@ -291,16 +325,34 @@ export class PmuTurfinfoProvider implements OddsProvider {
    */
   async getArrival(dateISO: string, reunion: number, course: number): Promise<ProviderArrival> {
     const pmuDate = toPmuDate(dateISO);
-    let data: Record<string, unknown>;
+    let data: unknown;
     try {
-      data = (await this.getJson(
+      data = await this.getJson(
         `/programme/${pmuDate}/R${reunion}/C${course}/rapports-definitifs`,
-      )) as Record<string, unknown>;
+      );
     } catch {
-      // Course non encore courue / pas d'arrivée : ne pas throw, renvoyer vide.
       return { reunion, course, ordre: [], definitif: false };
     }
     const a = normalizeArrival(data);
+
+    // Enrichissement des noms : appel participants en parallèle dès qu'on a un ordre non vide.
+    if (a.ordre.length > 0) {
+      try {
+        const raceData = await this.getJson(`/programme/${pmuDate}/R${reunion}/C${course}/participants`) as {
+          participants?: Array<Record<string, unknown>>;
+        };
+        const nameMap = new Map<number, string>();
+        for (const p of raceData.participants ?? []) {
+          const num = Number(p.numPmu ?? 0);
+          if (num > 0 && p.nom) nameMap.set(num, String(p.nom));
+        }
+        const ordre = a.ordre.map(r => ({ ...r, name: nameMap.get(r.number) }));
+        return { ...a, reunion, course, ordre };
+      } catch {
+        // Participants indisponibles : on renvoie l'ordre sans les noms.
+      }
+    }
+
     return { ...a, reunion, course };
   }
 }
