@@ -59,7 +59,7 @@ function countdownStatus(
 }
 
 /** Pastille compacte heure + compte à rebours (boutons de la liste). */
-function CountdownPill({ status }: { status: CountdownStatus }) {
+function CountdownPill({ status }: Readonly<{ status: CountdownStatus }>) {
   return (
     <span
       style={{
@@ -85,3 +85,4 @@ function CountdownPill({ status }: { status: CountdownStatus }) {
 
 export { CountdownPill, countdownStatus };
 export type { CountdownStatus };
+

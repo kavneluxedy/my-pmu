@@ -21,5 +21,9 @@ apps/web/dist/
 .DS_Store
 Thumbs.db
 
+# pnpm
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
 # Claude
 .claude/settings.local.json
