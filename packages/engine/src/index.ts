@@ -15,4 +15,5 @@ export {
   normalizeCitationRunner,
   normalizeArrival,
   extractOdds,
+  mergeSimpleMassesFromCombinations,
 } from "./providers/pmuTurfinfo.js";

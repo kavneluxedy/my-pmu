@@ -191,7 +191,7 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
          // Fallback ultime : mode masses vide
          setMode("masses");
          setTotalPool(String(coupleReports?.placeMasses.totalPool ?? 0));
-         setStakeOnSelection("1000");
+         setStakeOnSelection("10");
          setUsesCouplePlaceFallback(true);
       }
    };

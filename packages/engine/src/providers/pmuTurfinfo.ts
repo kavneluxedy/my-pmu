@@ -44,6 +44,11 @@ export interface PmuTurfinfoOptions {
   baseUrl?: string;
 }
 
+/** Les montants d'enjeux de l'API PMU sont en centimes ; on les ramène en euros. */
+function centsToEuros(cents: number): number {
+  return Math.round(cents) / 100;
+}
+
 /** Convertit une date ISO (AAAA-MM-JJ) au format PMU JJMMAAAA. */
 export function toPmuDate(dateISO: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateISO);
@@ -104,7 +109,7 @@ export function normalizeCitationRunner(
     name: String(raw.nom ?? ""),
     scratched: raw.statut === "NON_PARTANT",
     favoris: raw.favoris === true,
-    enjeu: c1.enjeu,
+    enjeu: centsToEuros(c1.enjeu),
     ratio: typeof c1.ratio === "number" ? c1.ratio : undefined,
   };
 }
@@ -438,17 +443,17 @@ export class PmuTurfinfoProvider implements OddsProvider {
         return { betType, rawTypePari, totalPool: 0, combinations: [] };
       }
 
-      // Pool = totalEnjeu du bloc
-      const totalPool = typeof bloc.totalEnjeu === "number" ? bloc.totalEnjeu : 0;
+      // Pool = totalEnjeu du bloc (convertir centimes → euros)
+      const totalPool = typeof bloc.totalEnjeu === "number" ? centsToEuros(bloc.totalEnjeu) : 0;
 
-      // Combinations = paires + enjeu de chaque
+      // Combinations = paires (ou simples à 1 numéro) + enjeu de chaque (convertir centimes → euros)
       const combinations: CombinationMass[] = listeComb
         .map((comb) => {
           const pair = comb.combinaison;
           const enjeu = comb.totalEnjeu;
-          if (!Array.isArray(pair) || pair.length !== 2) return null;
+          if (!Array.isArray(pair) || pair.length < 1) return null;
           if (typeof enjeu !== "number" || enjeu <= 0) return null;
-          return { pair: pair as number[], enjeu };
+          return { pair: pair as number[], enjeu: centsToEuros(enjeu) };
         })
         .filter((c): c is CombinationMass => c !== null);
 
@@ -494,4 +499,37 @@ export class PmuTurfinfoProvider implements OddsProvider {
 
     return { ...a, reunion, course };
   }
+}
+
+/**
+ * Fusionne les masses « tous canaux » (endpoint combinaisons) dans les blocs
+ * Simple des citations (qui ne couvrent que les mises INTERNET). Pour chaque bloc
+ * simple_gagnant / simple_place : le pool devient le totalPool tous-canaux, et
+ * l'enjeu de chaque partant devient l'enjeu tous-canaux du cheval (combinaison à
+ * un seul numéro), avec `ratio` recalculé (part du pool en %). Les blocs non-Simple
+ * sont laissés inchangés. Renvoie un nouvel objet (immutabilité).
+ */
+export function mergeSimpleMassesFromCombinations(
+  citations: ProviderCitations,
+  combinations: ProviderCombinations,
+): ProviderCitations {
+  const SIMPLE = new Set(["simple_gagnant", "simple_place"]);
+  const betTypes = citations.betTypes.map((block) => {
+    if (block.betType == null || !SIMPLE.has(block.betType)) return block;
+    const combBlock = combinations.betTypes.find((c) => c.betType === block.betType);
+    if (!combBlock) return block;
+    const enjeuByNumber = new Map<number, number>();
+    for (const comb of combBlock.combinations) {
+      if (comb.pair.length === 1) enjeuByNumber.set(comb.pair[0]!, comb.enjeu);
+    }
+    const totalPool = combBlock.totalPool;
+    const runners = block.runners.map((r) => {
+      const enjeu = enjeuByNumber.get(r.number);
+      if (enjeu == null) return r; // pas d'enjeu tous-canaux pour ce cheval : on garde tel quel
+      const ratio = totalPool > 0 ? (enjeu / totalPool) * 100 : 0;
+      return { ...r, enjeu, ratio };
+    });
+    return { ...block, totalPool, runners };
+  });
+  return { ...citations, betTypes };
 }

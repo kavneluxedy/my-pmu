@@ -8,6 +8,7 @@ import {
   normalizeArrival,
   normalizeRunner,
   toPmuDate,
+  mergeSimpleMassesFromCombinations,
 } from "./pmuTurfinfo.js";
 
 describe("toPmuDate", () => {
@@ -269,7 +270,7 @@ describe("normalizeCitationRunner", () => {
       name: "JERZINHO SPORT",
       scratched: false,
       favoris: true,
-      enjeu: 699800,
+      enjeu: 6998,
       ratio: 42.81,
     });
   });
@@ -322,8 +323,8 @@ describe("getCitations", () => {
 
     const sg = cit.betTypes.find((b) => b.rawTypePari === "E_SIMPLE_GAGNANT");
     expect(sg?.betType).toBe("simple_gagnant");
-    // totalPool = 699800 + 180530 (le NON_PARTANT est exclu).
-    expect(sg?.totalPool).toBe(880330);
+    // totalPool = 6998 + 1805.30 (le NON_PARTANT est exclu). En euros.
+    expect(sg?.totalPool).toBe(8803.30);
     expect(sg?.runners).toHaveLength(3);
     expect(sg?.runners.find((r) => r.number === 9)?.scratched).toBe(true);
     expect(cit.updatetime).toBe(1_783_185_210_000);
@@ -334,9 +335,9 @@ describe("getCitations", () => {
     const cit = await provider.getCitations("2026-07-04", 6, 2);
     const sq = cit.betTypes.find((b) => b.rawTypePari === "E_SUPER_QUATRE");
     expect(sq?.betType).toBeUndefined();
-    // Seule la position 1 est retenue (55750), les positions > 1 ignorées.
-    expect(sq?.runners[0]?.enjeu).toBe(55750);
-    expect(sq?.totalPool).toBe(55750);
+    // Seule la position 1 est retenue (557.50 euros), les positions > 1 ignorées.
+    expect(sq?.runners[0]?.enjeu).toBe(557.50);
+    expect(sq?.totalPool).toBe(557.50);
   });
 
   it("marque un bloc indisponible sans participants", async () => {
@@ -463,13 +464,13 @@ describe("getCombinations", () => {
 
     const cg = combos.betTypes.find((b) => b.betType === "couple_gagnant");
     expect(cg?.rawTypePari).toBe("COUPLE_GAGNANT"); // conserve le libellé original (sans E_)
-    expect(cg?.totalPool).toBe(5000000);
+    expect(cg?.totalPool).toBe(50000);
     expect(cg?.combinations).toHaveLength(2);
-    expect(cg?.combinations[0]).toEqual({ pair: [3, 7], enjeu: 250000 });
+    expect(cg?.combinations[0]).toEqual({ pair: [3, 7], enjeu: 2500 });
 
     const cp = combos.betTypes.find((b) => b.betType === "couple_place");
     expect(cp?.rawTypePari).toBe("COUPLE_PLACE");
-    expect(cp?.totalPool).toBe(3500000);
+    expect(cp?.totalPool).toBe(35000);
   });
 
   it("mappe COUPLE_PLACE (sans préfixe E_) vers couple_place", async () => {
@@ -498,5 +499,48 @@ describe("getCombinations", () => {
     });
     const combos = await provider.getCombinations("2026-07-04", 4, 7);
     expect(combos.betTypes).toEqual([]);
+  });
+});
+
+describe("mergeSimpleMassesFromCombinations", () => {
+  it("remplace pool et enjeux Simple par les valeurs tous canaux et recalcule le ratio", () => {
+    const citations = {
+      reunion: 6, course: 2,
+      betTypes: [
+        {
+          betType: "simple_place", rawTypePari: "E_SIMPLE_PLACE", totalPool: 14739.60,
+          runners: [
+            { number: 3, name: "A", enjeu: 2184.70, ratio: 14.82, favoris: true },
+            { number: 2, name: "B", enjeu: 1200.00, ratio: 8.14 },
+          ],
+        },
+        // bloc non-Simple laissé intact :
+        { betType: "couple_place", rawTypePari: "E_COUPLE_PLACE", totalPool: 100, runners: [{ number: 3, name: "A", enjeu: 50 }] },
+      ],
+    };
+    const combinations = {
+      reunion: 6, course: 2,
+      betTypes: [
+        {
+          betType: "simple_place", rawTypePari: "SIMPLE_PLACE", totalPool: 70442.50,
+          combinations: [
+            { pair: [3], enjeu: 22139.00 },
+            { pair: [2], enjeu: 16166.00 },
+          ],
+        },
+      ],
+    };
+    const merged = mergeSimpleMassesFromCombinations(citations as any, combinations as any);
+    const sp = merged.betTypes.find((b) => b.betType === "simple_place");
+    expect(sp?.totalPool).toBe(70442.50);
+    const r3 = sp?.runners.find((r) => r.number === 3);
+    expect(r3?.enjeu).toBe(22139.00);
+    expect(r3?.ratio).toBeCloseTo(31.43, 1);
+    // le favori et le nom sont conservés
+    expect(r3?.favoris).toBe(true);
+    expect(r3?.name).toBe("A");
+    // bloc non-Simple inchangé
+    const cp = merged.betTypes.find((b) => b.betType === "couple_place");
+    expect(cp?.totalPool).toBe(100);
   });
 });

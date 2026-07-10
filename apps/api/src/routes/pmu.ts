@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { ProviderArrival } from "@pmu/engine";
+import { mergeSimpleMassesFromCombinations } from "@pmu/engine";
 import { z } from "zod";
 import { getCitations, getArrival, getPlaceReports, getProgramme, getRace, getCoupleGagnantReports, getCombinations } from "../pmuCache.js";
 import { prisma } from "../db.js";
@@ -38,7 +39,11 @@ export async function pmuRoutes(app: FastifyInstance): Promise<void> {
     const parsed = dateSchema.safeParse(p.date);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     try {
-      return await getCitations(parsed.data, Number(p.reunion), Number(p.course));
+      const [citations, combinations] = await Promise.all([
+        getCitations(parsed.data, Number(p.reunion), Number(p.course)),
+        getCombinations(parsed.data, Number(p.reunion), Number(p.course)),
+      ]);
+      return mergeSimpleMassesFromCombinations(citations, combinations);
     } catch (e) {
       return reply.code(502).send({ error: `Import PMU indisponible : ${(e as Error).message}` });
     }

@@ -16,7 +16,7 @@ export default function CitationTable({
    return (
       <div className="result-box" style={{ marginTop: 12 }}>
          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-            Rapports probables (enjeux réels PMU, indicatifs et non contractuels).
+            Rapports probables (enjeux tous canaux PMU, indicatifs et non contractuels).
          </div>
          <table>
             <thead>
@@ -42,7 +42,7 @@ export default function CitationTable({
                            {r.number} — {r.name}
                            {r.favoris ? " ★" : ""}
                         </td>
-                        <td>{r.enjeu.toLocaleString("fr-FR")}</td>
+                        <td>{r.enjeu.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
                         <td>{r.ratio == null ? "—" : `${r.ratio.toFixed(2)} %`}</td>
                         <td>{rapport >= 1 ? `${rapport.toFixed(2)} €` : "—"}</td>
                      </tr>
