@@ -2,22 +2,20 @@ import { useEffect, useState } from "react";
 import {
    api,
    type PayoutResult,
-   type PlaceReport,
 } from "../api/client.js";
 import CitationPicker from "../components/CitationPicker.js";
 import CitationTable from "../components/CitationTable.js";
 import CouplePicker from "../components/CouplePicker.js";
+import OddsBadge from "../components/OddsBadge.js";
 import { useCitations } from "../hooks/useCitations.js";
 import { usePlaceReports } from "../hooks/usePlaceReports.js";
 import { useCoupleReports } from "../hooks/useCoupleReports.js";
 import { BET_TYPE_LABELS, BET_TYPES, minStakeFor, type BetType } from "../lib/betTypes.js";
 import { citationBlockFor } from "../lib/citation.js";
+import { favoriteNumber, oddsGradientColor, oddsRange } from "../lib/oddsColor.js";
+import { medianRapport } from "../lib/placeReport.js";
 import type { RunnerSummary } from "../lib/runner.js";
 import { getStoredRace } from "../raceStore.js";
-
-function medianRapport(pr: PlaceReport): number {
-   return (pr.minRapport + pr.maxRapport) / 2;
-}
 
 export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary[] }>) {
    const [betType, setBetType] = useState<BetType>(BET_TYPES[0]);
@@ -58,6 +56,9 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    const realRunners: RunnerSummary[] =
       storedRaceRunners.length > 0 ? storedRaceRunners : runners;
 
+   const favNumber = favoriteNumber(runners);
+   const oddsRangeForRunners = oddsRange(runners);
+
    const selectedPlaceReport =
       mode === "cote" && betType === "simple_place" && selectedNumber != null
          ? placeReports.find((p) => p.number === selectedNumber)
@@ -97,10 +98,10 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    }, [betType, reloadCoupleReports]);
 
    useEffect(() => {
-      if (mode === "cote" && betType === "simple_place" && getStoredRace()) {
+      if ((betType === "simple_place" || betType === "couple_place") && getStoredRace()) {
          void reloadPlaceReports();
       }
-   }, [mode, betType, reloadPlaceReports]);
+   }, [betType, reloadPlaceReports]);
 
    useEffect(() => {
       if (mode !== "cote" || betType !== "simple_place" || selectedNumber == null) return;
@@ -272,7 +273,10 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                         ];
                         return (
                            <div key={r.number} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              <span style={{ fontSize: 13 }}>{runnerLabel}</span>
+                              <span style={{ fontSize: 13 }}>
+                                 {r.number === favNumber && "★ "}
+                                 {runnerLabel}
+                              </span>
                               {values.map((v) => {
                                  const active = selectedNumber === r.number && selectedRapportKind === v.kind;
                                  return (
@@ -295,16 +299,28 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                      }
 
                      const active = selectedNumber === r.number;
-                     const buttonLabel = r.odds ? `${runnerLabel} (${r.odds.toFixed(1)})` : runnerLabel;
 
                      return (
                         <button
                            key={r.number}
                            className={active ? undefined : "secondary"}
-                           style={active ? { background: "var(--accent)", color: "#0b1a10" } : {}}
+                           style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              ...(active ? { background: "var(--accent)", color: "#0b1a10" } : {}),
+                           }}
                            onClick={() => pickRunnerOdds(r)}
                         >
-                           {buttonLabel}
+                           <span>{runnerLabel}</span>
+                           {r.odds != null && oddsRangeForRunners && (
+                              <OddsBadge
+                                 odds={r.odds}
+                                 color={oddsGradientColor(r.odds, oddsRangeForRunners.min, oddsRangeForRunners.max)}
+                                 favorite={r.number === favNumber}
+                                 onDark={active}
+                              />
+                           )}
                         </button>
                      );
                   })}
@@ -339,7 +355,12 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                   )}
                </div>
                {realRunners.length > 0 && (
-                  <CouplePicker runners={realRunners} onPick={pickCouple} />
+                  <CouplePicker
+                     runners={realRunners}
+                     betType={betType}
+                     placeReports={placeReports}
+                     onPick={pickCouple}
+                  />
                )}
                {betType === "couple_gagnant" && coupleReports?.gagnant.length === 0 && (
                   <div style={{ marginTop: 10 }}>
@@ -376,7 +397,12 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                   )}
                </div>
                {realRunners.length > 0 && (
-                  <CouplePicker runners={realRunners} onPick={pickCouple} />
+                  <CouplePicker
+                     runners={realRunners}
+                     betType={betType}
+                     placeReports={placeReports}
+                     onPick={pickCouple}
+                  />
                )}
                {betType === "couple_place" && coupleReports?.placeMasses.totalPool === 0 && (
                   <div style={{ marginTop: 10 }}>
