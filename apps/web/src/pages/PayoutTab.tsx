@@ -24,7 +24,8 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    const [mode, setMode] = useState<"cote" | "masses">("cote");
    const [stake, setStake] = useState("2");
    const [rapport, setRapport] = useState("4.5");
-   const [selectedRunner, setSelectedRunner] = useState<number | null>(null);
+   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
+   const [selectedRapportKind, setSelectedRapportKind] = useState<"min" | "median" | "max" | null>(null);
    const [totalPool, setTotalPool] = useState("10000");
    const [stakeOnSelection, setStakeOnSelection] = useState("1000");
    const [runnersCount, setRunnersCount] = useState(() =>
@@ -58,14 +59,14 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
       storedRaceRunners.length > 0 ? storedRaceRunners : runners;
 
    const selectedPlaceReport =
-      mode === "cote" && betType === "simple_place" && selectedRunner != null
-         ? placeReports.find((p) => p.number === runners[selectedRunner]?.number)
+      mode === "cote" && betType === "simple_place" && selectedNumber != null
+         ? placeReports.find((p) => p.number === selectedNumber)
          : undefined;
 
    let placeReportHint = "Sélectionnez un partant ci-dessus ou saisissez le rapport manuellement.";
    if (prLoading) {
       placeReportHint = "Chargement du rapport probable PMU…";
-   } else if (rapport && selectedRunner != null) {
+   } else if (rapport && selectedNumber != null) {
       placeReportHint = selectedPlaceReport
          ? "Rapport probable PMU (non contractuel) — modifiable."
          : "Rapport saisi manuellement — reste modifiable.";
@@ -73,8 +74,17 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
 
    useEffect(() => {
       if (runners.length > 0) setRunnersCount(String(runners.length));
-      setSelectedRunner(null);
    }, [runners]);
+
+   // Purge la sélection seulement si le partant a réellement disparu (non-partant,
+   // course changée). On NE réinitialise PAS à chaque rafraîchissement des cotes,
+   // pour que le pick de l'utilisateur reste visible et stable.
+   useEffect(() => {
+      if (selectedNumber != null && !runners.some((r) => r.number === selectedNumber)) {
+         setSelectedNumber(null);
+         setSelectedRapportKind(null);
+      }
+   }, [runners, selectedNumber]);
 
    useEffect(() => {
       if (mode === "masses") void reloadCitations();
@@ -93,26 +103,26 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    }, [mode, betType, reloadPlaceReports]);
 
    useEffect(() => {
-      if (mode !== "cote" || betType !== "simple_place" || selectedRunner == null) return;
+      if (mode !== "cote" || betType !== "simple_place" || selectedNumber == null) return;
       if (rapport !== "") return;
-      const r = runners[selectedRunner];
-      const pr = r && placeReports.find((p) => p.number === r.number);
-      if (pr) setRapport(medianRapport(pr).toFixed(2));
-   }, [placeReports, selectedRunner, betType, mode, runners]);
+      const pr = placeReports.find((p) => p.number === selectedNumber);
+      if (pr) {
+         setRapport(medianRapport(pr).toFixed(2));
+         setSelectedRapportKind("median");
+      }
+   }, [placeReports, selectedNumber, betType, mode]);
 
    useEffect(() => {
       if (mode !== "cote" || betType !== "simple_place" || rapport !== "") return;
-      if (selectedRunner != null) return;
-      const firstRunnerIndex = runners.findIndex((r) =>
-         placeReports.some((p) => p.number === r.number),
-      );
-      if (firstRunnerIndex === -1) return;
-      const r = runners[firstRunnerIndex];
+      if (selectedNumber != null) return;
+      const r = runners.find((x) => placeReports.some((p) => p.number === x.number));
+      if (!r) return;
       const pr = placeReports.find((p) => p.number === r.number);
       if (!pr) return;
-      setSelectedRunner(firstRunnerIndex);
+      setSelectedNumber(r.number);
+      setSelectedRapportKind("median");
       setRapport(medianRapport(pr).toFixed(2));
-   }, [mode, betType, rapport, runners, placeReports]);
+   }, [mode, betType, rapport, runners, placeReports, selectedNumber]);
 
    const pickCitation = (enjeu: number) => {
       if (!citBlock) return;
@@ -121,7 +131,8 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    };
 
    useEffect(() => {
-      setSelectedRunner(null);
+      setSelectedNumber(null);
+      setSelectedRapportKind(null);
       setRapport("");
    }, [betType]);
 
@@ -185,16 +196,16 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
       }
    };
 
-   const pickRunner = (idx: number) => {
-      const r = runners[idx];
-      if (!r) return;
-      setSelectedRunner(idx);
-      if (betType === "simple_place") {
-         const pr = placeReports.find((p) => p.number === r.number);
-         setRapport(pr ? medianRapport(pr).toFixed(2) : "");
-      } else if (r.odds) {
-         setRapport(r.odds.toFixed(2));
-      }
+   const pickRunnerValue = (r: RunnerSummary, kind: "min" | "median" | "max", value: number) => {
+      setSelectedNumber(r.number);
+      setSelectedRapportKind(kind);
+      setRapport(value.toFixed(2));
+   };
+
+   const pickRunnerOdds = (r: RunnerSummary) => {
+      setSelectedNumber(r.number);
+      setSelectedRapportKind(null);
+      if (r.odds) setRapport(r.odds.toFixed(2));
    };
 
    const run = async () => {
@@ -241,30 +252,57 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                      ? "Choisir un partant (pré-remplit le rapport probable placé depuis le PMU)"
                      : "Choisir un partant (remplit la cote automatiquement)"}
                </div>
-               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {runners.map((r, i) => {
-                     const report =
-                        betType === "simple_place"
-                           ? placeReports.find((p) => p.number === r.number)
-                           : undefined;
-
+               <div style={{ display: "flex", flexWrap: "wrap", gap: betType === "simple_place" ? 10 : 6 }}>
+                  {runners.map((r) => {
                      const runnerLabel = `${r.number} — ${r.name}`;
 
-                     const buttonLabel =
-                        betType === "simple_place"
-                           ? report
-                              ? `${runnerLabel} (${report.minRapport.toFixed(2)} / ${medianRapport(report).toFixed(2)} / ${report.maxRapport.toFixed(2)})`
-                              : `${runnerLabel} (rapport indisponible)`
-                           : r.odds
-                              ? `${runnerLabel} (${r.odds.toFixed(1)})`
-                              : runnerLabel;
+                     if (betType === "simple_place") {
+                        const report = placeReports.find((p) => p.number === r.number);
+                        if (!report) {
+                           return (
+                              <span key={r.number} className="muted" style={{ fontSize: 12 }}>
+                                 {runnerLabel} (rapport indisponible)
+                              </span>
+                           );
+                        }
+                        const values: { kind: "min" | "median" | "max"; label: string; value: number; color: string }[] = [
+                           { kind: "min", label: "Min", value: report.minRapport, color: "var(--danger)" },
+                           { kind: "median", label: "Méd", value: medianRapport(report), color: "var(--accent)" },
+                           { kind: "max", label: "Max", value: report.maxRapport, color: "var(--accent-2)" },
+                        ];
+                        return (
+                           <div key={r.number} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ fontSize: 13 }}>{runnerLabel}</span>
+                              {values.map((v) => {
+                                 const active = selectedNumber === r.number && selectedRapportKind === v.kind;
+                                 return (
+                                    <button
+                                       key={v.kind}
+                                       className="secondary"
+                                       style={{
+                                          borderColor: v.color,
+                                          color: active ? "#0b1a10" : v.color,
+                                          background: active ? v.color : "transparent",
+                                       }}
+                                       onClick={() => pickRunnerValue(r, v.kind, v.value)}
+                                    >
+                                       {v.label} {v.value.toFixed(2)}
+                                    </button>
+                                 );
+                              })}
+                           </div>
+                        );
+                     }
+
+                     const active = selectedNumber === r.number;
+                     const buttonLabel = r.odds ? `${runnerLabel} (${r.odds.toFixed(1)})` : runnerLabel;
 
                      return (
                         <button
                            key={r.number}
-                           className={selectedRunner === i ? undefined : "secondary"}
-                           style={selectedRunner === i ? { background: "#35c46a", color: "#0b1a10" } : {}}
-                           onClick={() => pickRunner(i)}
+                           className={active ? undefined : "secondary"}
+                           style={active ? { background: "var(--accent)", color: "#0b1a10" } : {}}
+                           onClick={() => pickRunnerOdds(r)}
                         >
                            {buttonLabel}
                         </button>
