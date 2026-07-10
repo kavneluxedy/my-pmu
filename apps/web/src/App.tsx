@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useProgrammeStore, useProgrammePolling } from "./programmeStore.js";
 
@@ -135,11 +135,66 @@ function NextRaceWidget({ collapsed }: { collapsed: boolean }) {
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const backdropRef = useRef<HTMLDivElement>(null);
   useProgrammePolling();
 
+  // Détecter le changement de breakpoint
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // Fermer le menu mobile si on passe à desktop
+      if (!mobile) setMobileMenuOpen(false);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Fermer le menu en cliquant sur le backdrop
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === backdropRef.current) {
+      setMobileMenuOpen(false);
+    }
+  };
+
+  // Fermer le menu après navigation
+  const handleNavClick = () => {
+    if (isMobile) {
+      setMobileMenuOpen(false);
+    }
+  };
+
   return (
-    <div className={`layout${collapsed ? " sidebar-collapsed" : ""}`}>
-      <nav className="sidebar">
+    <div className={`layout${collapsed ? " sidebar-collapsed" : ""}${mobileMenuOpen ? " mobile-menu-open" : ""}`}>
+      {/* Backdrop mobile */}
+      {isMobile && mobileMenuOpen && (
+        <div
+          className="mobile-backdrop"
+          ref={backdropRef}
+          onClick={handleBackdropClick}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Hamburger button (visible sur mobile) */}
+      {isMobile && (
+        <button
+          className="hamburger-menu"
+          onClick={() => setMobileMenuOpen((o) => !o)}
+          aria-label="Ouvrir le menu de navigation"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="sidebar-nav"
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+      )}
+
+      <nav className="sidebar" id="sidebar-nav">
         {/* Zone scrollable : logo + liens */}
         <div className="sidebar-scroll">
           {!collapsed && (
@@ -157,6 +212,7 @@ export default function App() {
               end={l.end}
               className={({ isActive }) => `nav-link${isActive ? " active" : ""}${collapsed ? " nav-link-icon" : ""}`}
               title={collapsed ? l.label : undefined}
+              onClick={handleNavClick}
             >
               <span className="nav-icon">{l.icon}</span>
               {!collapsed && <span>{l.label}</span>}
@@ -167,13 +223,17 @@ export default function App() {
         {/* Zone fixe en bas : widget + toggle */}
         <div className="sidebar-bottom">
           <NextRaceWidget collapsed={collapsed} />
-          <button
-            className="sidebar-toggle"
-            onClick={() => setCollapsed((c) => !c)}
-            title={collapsed ? "Ouvrir le menu" : "Réduire le menu"}
-          >
-            {collapsed ? "›" : "‹"}
-          </button>
+          {!isMobile && (
+            <button
+              className="sidebar-toggle"
+              onClick={() => setCollapsed((c) => !c)}
+              title={collapsed ? "Ouvrir le menu" : "Réduire le menu"}
+              aria-label={collapsed ? "Ouvrir le menu" : "Réduire le menu"}
+              aria-expanded={!collapsed}
+            >
+              {collapsed ? "›" : "‹"}
+            </button>
+          )}
         </div>
       </nav>
 
