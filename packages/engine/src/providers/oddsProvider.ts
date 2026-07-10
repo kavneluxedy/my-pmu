@@ -70,6 +70,10 @@ export interface OddsProvider {
   getArrival(dateISO: string, reunion: number, course: number): Promise<ProviderArrival>;
   /** Récupère les rapports probables placés de chaque partant (E_SIMPLE_PLACE). */
   getPlaceReports(dateISO: string, reunion: number, course: number): Promise<ProviderPlaceReports>;
+  /** Récupère les rapports probables Couplé Gagnant de chaque paire (E_COUPLE_GAGNANT). */
+  getCoupleGagnantReports(dateISO: string, reunion: number, course: number): Promise<ProviderCoupleGagnantReports>;
+  /** Récupère les masses (enjeux) par combinaison de paires (endpoint combinaisons). */
+  getCombinations(dateISO: string, reunion: number, course: number): Promise<ProviderCombinations>;
 }
 
 /**
@@ -137,4 +141,54 @@ export interface ProviderPlaceReports {
   reunion: number;
   course: number;
   runners: PlaceReport[];
+}
+
+/**
+ * Rapport probable Couplé Gagnant pour une paire de chevaux.
+ * Endpoint rapports/E_COUPLE_GAGNANT du PMU.
+ */
+export interface CoupleGagnantReport {
+  pair: [number, number];
+  rapportDirect: number;
+  tendance?: number;
+}
+
+/** Rapports probables Couplé Gagnant de toutes les paires gagnantes. */
+export interface ProviderCoupleGagnantReports {
+  reunion: number;
+  course: number;
+  reports: CoupleGagnantReport[];
+}
+
+/**
+ * Enjeu misé sur une combinaison de 2 chevaux (paire) pour un type de pari donné.
+ * Issu du bloc « combinaisons » du PMU (masses « les plus jouées »).
+ */
+export interface CombinationMass {
+  pair: number[];
+  enjeu: number;
+}
+
+/**
+ * Bloc « combinaisons » d'un type de pari sur une course (ex. Couplé Placé),
+ * avec la masse totale et l'enjeu de chaque paire (top ~12 les plus jouées).
+ */
+export interface CombinationBetType {
+  /** Type de pari normalisé (undefined si le libellé PMU n'est pas mappé). */
+  betType?: BetType;
+  /** Libellé brut PMU (COUPLE_PLACE, …), conservé pour affichage/debug. */
+  rawTypePari: string;
+  /** Masse totale du pool (somme des enjeux de toutes les combinaisons). */
+  totalPool: number;
+  /** Combinaisons top jouées (≈12 paires les plus jouées). */
+  combinations: CombinationMass[];
+}
+
+/** Réponse « combinaisons » normalisée d'une course (par type de pari). */
+export interface ProviderCombinations {
+  reunion: number;
+  course: number;
+  /** Horodatage (epoch ms) de la dernière mise à jour PMU, si disponible. */
+  updatetime?: number;
+  betTypes: CombinationBetType[];
 }

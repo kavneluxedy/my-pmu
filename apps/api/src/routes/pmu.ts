@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { ProviderArrival } from "@pmu/engine";
+import { mergeSimpleMassesFromCombinations } from "@pmu/engine";
 import { z } from "zod";
-import { getCitations, getArrival, getPlaceReports, getProgramme, getRace } from "../pmuCache.js";
+import { getCitations, getArrival, getPlaceReports, getProgramme, getRace, getCoupleGagnantReports, getCombinations } from "../pmuCache.js";
 import { prisma } from "../db.js";
 
 /** Normalise un nom de cheval pour comparaison (favoris « Mes chevaux »). */
@@ -38,7 +39,11 @@ export async function pmuRoutes(app: FastifyInstance): Promise<void> {
     const parsed = dateSchema.safeParse(p.date);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     try {
-      return await getCitations(parsed.data, Number(p.reunion), Number(p.course));
+      const [citations, combinations] = await Promise.all([
+        getCitations(parsed.data, Number(p.reunion), Number(p.course)),
+        getCombinations(parsed.data, Number(p.reunion), Number(p.course)),
+      ]);
+      return mergeSimpleMassesFromCombinations(citations, combinations);
     } catch (e) {
       return reply.code(502).send({ error: `Import PMU indisponible : ${(e as Error).message}` });
     }
@@ -50,6 +55,37 @@ export async function pmuRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     try {
       return await getPlaceReports(parsed.data, Number(p.reunion), Number(p.course));
+    } catch (e) {
+      return reply.code(502).send({ error: `Import PMU indisponible : ${(e as Error).message}` });
+    }
+  });
+
+  app.get("/api/pmu/couple-reports/:date/:reunion/:course", async (req, reply) => {
+    const p = req.params as { date: string; reunion: string; course: string };
+    const parsed = dateSchema.safeParse(p.date);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    try {
+      const [coupleGagnantReports, combinations] = await Promise.all([
+        getCoupleGagnantReports(parsed.data, Number(p.reunion), Number(p.course)),
+        getCombinations(parsed.data, Number(p.reunion), Number(p.course)),
+      ]);
+
+      // Extraire le bloc Couplé Placé des combinaisons
+      const placeMassesBlock = combinations.betTypes.find(
+        (bt) => bt.betType === "couple_place"
+      );
+
+      return {
+        reunion: coupleGagnantReports.reunion,
+        course: coupleGagnantReports.course,
+        gagnant: coupleGagnantReports.reports,
+        placeMasses: placeMassesBlock
+          ? {
+              totalPool: placeMassesBlock.totalPool,
+              combinations: placeMassesBlock.combinations,
+            }
+          : { totalPool: 0, combinations: [] },
+      };
     } catch (e) {
       return reply.code(502).send({ error: `Import PMU indisponible : ${(e as Error).message}` });
     }

@@ -29,6 +29,13 @@ describe("payoutFromOdds", () => {
     expect(r.mode).toBe("cote");
   });
 
+  it("fonctionne pour Couplé Gagnant", () => {
+    const r = payoutFromOdds("couple_gagnant", 2, 5.75);
+    expect(r.rapportBrutPourUnEuro).toBeCloseTo(5.7, 2); // arrondi au décime inf.
+    expect(r.grossPayout).toBeCloseTo(11.4, 2);
+    expect(r.mode).toBe("cote");
+  });
+
   it("rejette un rapport inférieur à 1", () => {
     expect(() => payoutFromOdds("simple_gagnant", 2, 0.9)).toThrow();
   });
@@ -150,6 +157,16 @@ describe("couplePlaceFromMasses", () => {
       2,
     );
     expect(r.rapportBrutPourUnEuro).toBeCloseTo(6.3, 2);
+  });
+
+  it("calcule avec des chiffres réels (R2C4, paire 7-9, TRJ 0.76)", () => {
+    // totalPool=3751452, stakeOnCombination=498435, TRJ 0.76
+    // rapport = (3751452 × 0.76) / 3 / 498435 ≈ 1,905 → 1,9
+    const r = couplePlaceFromMasses(
+      { totalPool: 3751452, stakeOnCombination: 498435, trj: 0.76 },
+      2, // mise minimale 2 € pour couplé
+    );
+    expect(r.rapportBrutPourUnEuro).toBeCloseTo(1.9, 1);
   });
 
   it("rejette un enjeu de combinaison nul", () => {

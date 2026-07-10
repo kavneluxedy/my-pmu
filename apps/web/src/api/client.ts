@@ -165,6 +165,27 @@ export interface ProviderPlaceReports {
   runners: PlaceReport[];
 }
 
+/** Rapport probable Couplé Gagnant pour une paire de chevaux. */
+export interface CoupleGagnantReport {
+  pair: [number, number];
+  rapportDirect: number;
+  tendance?: number;
+}
+
+/** Enjeu sur une combinaison de 2 chevaux. */
+export interface CombinationMass {
+  pair: number[];
+  enjeu: number;
+}
+
+/** Réponse combinée : rapports Couplé Gagnant + masses Couplé Placé. */
+export interface CoupleReports {
+  reunion: number;
+  course: number;
+  gagnant: CoupleGagnantReport[];
+  placeMasses: { totalPool: number; combinations: CombinationMass[] };
+}
+
 export const api = {
   // Chevaux
   listHorses: () => request<Horse[]>("/api/horses"),
@@ -214,4 +235,6 @@ export const api = {
     request<Arrival>(`/api/pmu/arrivee/${date}/${reunion}/${course}`),
   placeReports: (date: string, reunion: number, course: number) =>
     request<ProviderPlaceReports>(`/api/pmu/place-reports/${date}/${reunion}/${course}`),
+  coupleReports: (date: string, reunion: number, course: number) =>
+    request<CoupleReports>(`/api/pmu/couple-reports/${date}/${reunion}/${course}`),
 };

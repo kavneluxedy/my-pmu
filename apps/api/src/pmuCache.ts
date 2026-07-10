@@ -6,6 +6,8 @@ import {
   PmuTurfinfoProvider,
   type ProviderArrival,
   type ProviderCitations,
+  type ProviderCombinations,
+  type ProviderCoupleGagnantReports,
   type ProviderPlaceReports,
   type ProviderProgramme,
   type ProviderRace,
@@ -31,6 +33,9 @@ const TTL_ARRIVAL_DEFINITIVE_MS = 1000 * 60 * 60; // 1 heure
 const TTL_ARRIVAL_PROVISIONAL_MS = 1000 * 30; // 30 s
 // Les rapports probables (place) changent en direct : cache court.
 const TTL_PLACE_REPORTS_MS = 1000 * 30; // 30 s
+// Les rapports Couplé Gagnant et les combinaisons changent en direct : cache court.
+const TTL_COUPLE_GAGNANT_REPORTS_MS = 1000 * 30; // 30 s
+const TTL_COMBINATIONS_MS = 1000 * 30; // 30 s
 
 async function readCache<T>(cacheKey: string, ttlMs: number): Promise<T | null> {
   const row = await prisma.rawPmuSnapshot.findUnique({ where: { cacheKey } });
@@ -105,6 +110,32 @@ export async function getPlaceReports(
   const cached = await readCache<ProviderPlaceReports>(key, TTL_PLACE_REPORTS_MS);
   if (cached) return cached;
   const fresh = await provider.getPlaceReports(dateISO, reunion, course);
+  await writeCache(key, fresh);
+  return fresh;
+}
+
+export async function getCoupleGagnantReports(
+  dateISO: string,
+  reunion: number,
+  course: number,
+): Promise<ProviderCoupleGagnantReports> {
+  const key = `couple-gagnant:${dateISO}:${reunion}:${course}`;
+  const cached = await readCache<ProviderCoupleGagnantReports>(key, TTL_COUPLE_GAGNANT_REPORTS_MS);
+  if (cached) return cached;
+  const fresh = await provider.getCoupleGagnantReports(dateISO, reunion, course);
+  await writeCache(key, fresh);
+  return fresh;
+}
+
+export async function getCombinations(
+  dateISO: string,
+  reunion: number,
+  course: number,
+): Promise<ProviderCombinations> {
+  const key = `combinaisons:${dateISO}:${reunion}:${course}`;
+  const cached = await readCache<ProviderCombinations>(key, TTL_COMBINATIONS_MS);
+  if (cached) return cached;
+  const fresh = await provider.getCombinations(dateISO, reunion, course);
   await writeCache(key, fresh);
   return fresh;
 }

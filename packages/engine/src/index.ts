@@ -6,4 +6,14 @@ export * from "./dutching.js";
 export * from "./valuebet.js";
 export * from "./stats.js";
 export * from "./providers/oddsProvider.js";
-export * from "./providers/pmuTurfinfo.js";
+export {
+  PmuTurfinfoProvider,
+  toPmuDate,
+  mapDiscipline,
+  mapTypePari,
+  normalizeRunner,
+  normalizeCitationRunner,
+  normalizeArrival,
+  extractOdds,
+  mergeSimpleMassesFromCombinations,
+} from "./providers/pmuTurfinfo.js";

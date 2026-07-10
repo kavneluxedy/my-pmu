@@ -6,8 +6,10 @@ import {
 } from "../api/client.js";
 import CitationPicker from "../components/CitationPicker.js";
 import CitationTable from "../components/CitationTable.js";
+import CouplePicker from "../components/CouplePicker.js";
 import { useCitations } from "../hooks/useCitations.js";
 import { usePlaceReports } from "../hooks/usePlaceReports.js";
+import { useCoupleReports } from "../hooks/useCoupleReports.js";
 import { BET_TYPE_LABELS, BET_TYPES, minStakeFor, type BetType } from "../lib/betTypes.js";
 import { citationBlockFor } from "../lib/citation.js";
 import type { RunnerSummary } from "../lib/runner.js";
@@ -22,7 +24,8 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    const [mode, setMode] = useState<"cote" | "masses">("cote");
    const [stake, setStake] = useState("2");
    const [rapport, setRapport] = useState("4.5");
-   const [selectedRunner, setSelectedRunner] = useState<number | null>(null);
+   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
+   const [selectedRapportKind, setSelectedRapportKind] = useState<"min" | "median" | "max" | null>(null);
    const [totalPool, setTotalPool] = useState("10000");
    const [stakeOnSelection, setStakeOnSelection] = useState("1000");
    const [runnersCount, setRunnersCount] = useState(() =>
@@ -30,11 +33,14 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    );
    const [result, setResult] = useState<PayoutResult | null>(null);
    const [error, setError] = useState<string | null>(null);
+   const [usesCouplePlaceFallback, setUsesCouplePlaceFallback] = useState(false);
 
    const { citations, loading: citLoading, error: citError, reload: reloadCitations } =
       useCitations();
    const { reports: placeReports, loading: prLoading, reload: reloadPlaceReports } =
       usePlaceReports();
+   const { coupleReports, loading: coupleLoading, error: coupleError, reload: reloadCoupleReports } =
+      useCoupleReports();
 
    const minStake = minStakeFor(betType);
    const couple = betType === "couple_gagnant" || betType === "couple_place";
@@ -43,15 +49,24 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    const needsRunnersCount = betType === "simple_place";
    const canPickOdds = mode === "cote" && !couple;
 
+   // Runners réels pour le CouplePicker. `runners` (prop) est filtré par les
+   // parents sur `odds != null` (cote Simple Gagnant connue) : inadapté pour le
+   // Couplé, qui n'a rien à voir avec cette cote et peut être vide/partiel au
+   // moment où l'onglet Couplé est ouvert. On repart donc de la course complète
+   // en store (tous les partants réels, non-scratched) plutôt que de la prop.
+   const storedRaceRunners = getStoredRace()?.race.runners.filter((r) => !r.scratched) ?? [];
+   const realRunners: RunnerSummary[] =
+      storedRaceRunners.length > 0 ? storedRaceRunners : runners;
+
    const selectedPlaceReport =
-      mode === "cote" && betType === "simple_place" && selectedRunner != null
-         ? placeReports.find((p) => p.number === runners[selectedRunner]?.number)
+      mode === "cote" && betType === "simple_place" && selectedNumber != null
+         ? placeReports.find((p) => p.number === selectedNumber)
          : undefined;
 
    let placeReportHint = "Sélectionnez un partant ci-dessus ou saisissez le rapport manuellement.";
    if (prLoading) {
       placeReportHint = "Chargement du rapport probable PMU…";
-   } else if (rapport && selectedRunner != null) {
+   } else if (rapport && selectedNumber != null) {
       placeReportHint = selectedPlaceReport
          ? "Rapport probable PMU (non contractuel) — modifiable."
          : "Rapport saisi manuellement — reste modifiable.";
@@ -59,12 +74,27 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
 
    useEffect(() => {
       if (runners.length > 0) setRunnersCount(String(runners.length));
-      setSelectedRunner(null);
    }, [runners]);
+
+   // Purge la sélection seulement si le partant a réellement disparu (non-partant,
+   // course changée). On NE réinitialise PAS à chaque rafraîchissement des cotes,
+   // pour que le pick de l'utilisateur reste visible et stable.
+   useEffect(() => {
+      if (selectedNumber != null && !runners.some((r) => r.number === selectedNumber)) {
+         setSelectedNumber(null);
+         setSelectedRapportKind(null);
+      }
+   }, [runners, selectedNumber]);
 
    useEffect(() => {
       if (mode === "masses") void reloadCitations();
    }, [mode, reloadCitations]);
+
+   useEffect(() => {
+      if ((betType === "couple_gagnant" || betType === "couple_place") && getStoredRace()) {
+         void reloadCoupleReports();
+      }
+   }, [betType, reloadCoupleReports]);
 
    useEffect(() => {
       if (mode === "cote" && betType === "simple_place" && getStoredRace()) {
@@ -73,26 +103,26 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    }, [mode, betType, reloadPlaceReports]);
 
    useEffect(() => {
-      if (mode !== "cote" || betType !== "simple_place" || selectedRunner == null) return;
+      if (mode !== "cote" || betType !== "simple_place" || selectedNumber == null) return;
       if (rapport !== "") return;
-      const r = runners[selectedRunner];
-      const pr = r && placeReports.find((p) => p.number === r.number);
-      if (pr) setRapport(medianRapport(pr).toFixed(2));
-   }, [placeReports, selectedRunner, betType, mode, runners]);
+      const pr = placeReports.find((p) => p.number === selectedNumber);
+      if (pr) {
+         setRapport(medianRapport(pr).toFixed(2));
+         setSelectedRapportKind("median");
+      }
+   }, [placeReports, selectedNumber, betType, mode]);
 
    useEffect(() => {
       if (mode !== "cote" || betType !== "simple_place" || rapport !== "") return;
-      if (selectedRunner != null) return;
-      const firstRunnerIndex = runners.findIndex((r) =>
-         placeReports.some((p) => p.number === r.number),
-      );
-      if (firstRunnerIndex === -1) return;
-      const r = runners[firstRunnerIndex];
+      if (selectedNumber != null) return;
+      const r = runners.find((x) => placeReports.some((p) => p.number === x.number));
+      if (!r) return;
       const pr = placeReports.find((p) => p.number === r.number);
       if (!pr) return;
-      setSelectedRunner(firstRunnerIndex);
+      setSelectedNumber(r.number);
+      setSelectedRapportKind("median");
       setRapport(medianRapport(pr).toFixed(2));
-   }, [mode, betType, rapport, runners, placeReports]);
+   }, [mode, betType, rapport, runners, placeReports, selectedNumber]);
 
    const pickCitation = (enjeu: number) => {
       if (!citBlock) return;
@@ -101,20 +131,81 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    };
 
    useEffect(() => {
-      setSelectedRunner(null);
+      setSelectedNumber(null);
+      setSelectedRapportKind(null);
       setRapport("");
    }, [betType]);
 
-   const pickRunner = (idx: number) => {
-      const r = runners[idx];
-      if (!r) return;
-      setSelectedRunner(idx);
-      if (betType === "simple_place") {
-         const pr = placeReports.find((p) => p.number === r.number);
-         setRapport(pr ? medianRapport(pr).toFixed(2) : "");
-      } else if (r.odds) {
-         setRapport(r.odds.toFixed(2));
+   const pickCouple = (pair: [number, number]) => {
+      const key = [pair[0], pair[1]].sort((a, b) => a - b).join("-");
+
+      if (betType === "couple_gagnant") {
+         // Mode cote : chercher le rapport dans coupleReports
+         if (coupleReports?.gagnant) {
+            const report = coupleReports.gagnant.find(
+               (r) => [r.pair[0], r.pair[1]].sort((a, b) => a - b).join("-") === key
+            );
+            if (report) {
+               setMode("cote");
+               setRapport(String(report.rapportDirect));
+               setUsesCouplePlaceFallback(false);
+               return;
+            }
+         }
+         // Fallback : rapport indisponible
+         setMode("cote");
+         setRapport("");
+         setUsesCouplePlaceFallback(false);
+      } else if (betType === "couple_place") {
+         // Mode masses : chercher l'enjeu dans les combinaisons
+         if (coupleReports?.placeMasses) {
+            const combo = coupleReports.placeMasses.combinations.find(
+               (c) => [...c.pair].sort((a, b) => a - b).join("-") === key
+            );
+            if (combo) {
+               setMode("masses");
+               setTotalPool(String(coupleReports.placeMasses.totalPool));
+               setStakeOnSelection(String(combo.enjeu));
+               setUsesCouplePlaceFallback(false);
+               return;
+            }
+            // Fallback : reconstruire l'enjeu par cheval
+            if (citBlock && citRunners.length > 0) {
+               const rA = citRunners.find((r) => r.number === pair[0]);
+               const rB = citRunners.find((r) => r.number === pair[1]);
+               if (rA && rB) {
+                  const T = citBlock.totalPool;
+                  const eA = rA.enjeu;
+                  const eB = rB.enjeu;
+                  const enjeuPair = Math.round(
+                     (coupleReports.placeMasses.totalPool * (eA / T) * (eB / T) * 2)
+                  );
+                  setMode("masses");
+                  setTotalPool(String(coupleReports.placeMasses.totalPool));
+                  setStakeOnSelection(String(enjeuPair));
+                  setUsesCouplePlaceFallback(true);
+                  return;
+               }
+            }
+         }
+         // Fallback ultime : mode masses vide
+         setMode("masses");
+         setTotalPool(String(coupleReports?.placeMasses.totalPool ?? 0));
+         setStakeOnSelection("10");
+         setUsesCouplePlaceFallback(true);
       }
+   };
+
+   const pickRunnerValue = (r: RunnerSummary, kind: "min" | "median" | "max", value: number) => {
+      setSelectedNumber(r.number);
+      setSelectedRapportKind(kind);
+      setRapport(value.toFixed(2));
+   };
+
+   const pickRunnerOdds = (r: RunnerSummary) => {
+      setSelectedNumber(r.number);
+      setSelectedRapportKind(null);
+      if (r.odds) setRapport(r.odds.toFixed(2));
    };
 
    const run = async () => {
@@ -161,30 +252,57 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                      ? "Choisir un partant (pré-remplit le rapport probable placé depuis le PMU)"
                      : "Choisir un partant (remplit la cote automatiquement)"}
                </div>
-               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {runners.map((r, i) => {
-                     const report =
-                        betType === "simple_place"
-                           ? placeReports.find((p) => p.number === r.number)
-                           : undefined;
-
+               <div style={{ display: "flex", flexWrap: "wrap", gap: betType === "simple_place" ? 10 : 6 }}>
+                  {runners.map((r) => {
                      const runnerLabel = `${r.number} — ${r.name}`;
 
-                     const buttonLabel =
-                        betType === "simple_place"
-                           ? report
-                              ? `${runnerLabel} (${report.minRapport.toFixed(2)} / ${medianRapport(report).toFixed(2)} / ${report.maxRapport.toFixed(2)})`
-                              : `${runnerLabel} (rapport indisponible)`
-                           : r.odds
-                              ? `${runnerLabel} (${r.odds.toFixed(1)})`
-                              : runnerLabel;
+                     if (betType === "simple_place") {
+                        const report = placeReports.find((p) => p.number === r.number);
+                        if (!report) {
+                           return (
+                              <span key={r.number} className="muted" style={{ fontSize: 12 }}>
+                                 {runnerLabel} (rapport indisponible)
+                              </span>
+                           );
+                        }
+                        const values: { kind: "min" | "median" | "max"; label: string; value: number; color: string }[] = [
+                           { kind: "min", label: "Min", value: report.minRapport, color: "var(--danger)" },
+                           { kind: "median", label: "Méd", value: medianRapport(report), color: "var(--accent)" },
+                           { kind: "max", label: "Max", value: report.maxRapport, color: "var(--accent-2)" },
+                        ];
+                        return (
+                           <div key={r.number} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ fontSize: 13 }}>{runnerLabel}</span>
+                              {values.map((v) => {
+                                 const active = selectedNumber === r.number && selectedRapportKind === v.kind;
+                                 return (
+                                    <button
+                                       key={v.kind}
+                                       className="secondary"
+                                       style={{
+                                          borderColor: v.color,
+                                          color: active ? "#0b1a10" : v.color,
+                                          background: active ? v.color : "transparent",
+                                       }}
+                                       onClick={() => pickRunnerValue(r, v.kind, v.value)}
+                                    >
+                                       {v.label} {v.value.toFixed(2)}
+                                    </button>
+                                 );
+                              })}
+                           </div>
+                        );
+                     }
+
+                     const active = selectedNumber === r.number;
+                     const buttonLabel = r.odds ? `${runnerLabel} (${r.odds.toFixed(1)})` : runnerLabel;
 
                      return (
                         <button
                            key={r.number}
-                           className={selectedRunner === i ? undefined : "secondary"}
-                           style={selectedRunner === i ? { background: "#35c46a", color: "#0b1a10" } : {}}
-                           onClick={() => pickRunner(i)}
+                           className={active ? undefined : "secondary"}
+                           style={active ? { background: "var(--accent)", color: "#0b1a10" } : {}}
+                           onClick={() => pickRunnerOdds(r)}
                         >
                            {buttonLabel}
                         </button>
@@ -194,7 +312,81 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
             </div>
          )}
 
-         {mode === "masses" && getStoredRace() && (
+         {couple && mode === "cote" && getStoredRace() && (
+            <div style={{ marginBottom: 14 }}>
+               <div
+                  className="muted"
+                  style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, marginBottom: 6 }}
+               >
+                  <span>
+                     {coupleLoading
+                        ? "Chargement des rapports Couplé…"
+                        : coupleError
+                           ? `Rapports Couplé indisponibles : ${coupleError}`
+                           : realRunners.length > 0
+                              ? "Choisir 2 partants (remplit le rapport depuis le PMU)"
+                              : "Aucune donnée disponible"}
+                  </span>
+                  {!coupleLoading && (
+                     <button
+                        className="secondary"
+                        onClick={() => void reloadCoupleReports()}
+                        disabled={coupleLoading}
+                        style={{ whiteSpace: "nowrap" }}
+                     >
+                        ↻ Actualiser
+                     </button>
+                  )}
+               </div>
+               {realRunners.length > 0 && (
+                  <CouplePicker runners={realRunners} onPick={pickCouple} />
+               )}
+               {betType === "couple_gagnant" && coupleReports?.gagnant.length === 0 && (
+                  <div style={{ marginTop: 10 }}>
+                     <p className="muted">Couplé Gagnant non proposé sur cette course.</p>
+                  </div>
+               )}
+            </div>
+         )}
+
+         {couple && mode === "masses" && getStoredRace() && (
+            <div style={{ marginBottom: 14 }}>
+               <div
+                  className="muted"
+                  style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, marginBottom: 6 }}
+               >
+                  <span>
+                     {coupleLoading
+                        ? "Chargement des combinaisons…"
+                        : coupleError
+                           ? `Données indisponibles : ${coupleError}`
+                           : realRunners.length > 0
+                              ? "Choisir 2 partants (remplit l'enjeu depuis les données réelles PMU)"
+                              : "Aucune donnée disponible"}
+                  </span>
+                  {!coupleLoading && (
+                     <button
+                        className="secondary"
+                        onClick={() => void reloadCoupleReports()}
+                        disabled={coupleLoading}
+                        style={{ whiteSpace: "nowrap" }}
+                     >
+                        ↻ Actualiser
+                     </button>
+                  )}
+               </div>
+               {realRunners.length > 0 && (
+                  <CouplePicker runners={realRunners} onPick={pickCouple} />
+               )}
+               {betType === "couple_place" && coupleReports?.placeMasses.totalPool === 0 && (
+                  <div style={{ marginTop: 10 }}>
+                     <p className="muted">Couplé Placé non proposé sur cette course.</p>
+                  </div>
+               )}
+            </div>
+         )}
+
+         {!couple && mode === "masses" && getStoredRace() && (
             <div style={{ marginBottom: 14 }}>
                <div
                   className="muted"
@@ -221,12 +413,6 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                {citRunners.length > 0 && (
                   <CitationPicker runners={citRunners} onPick={(r) => pickCitation(r.enjeu)} />
                )}
-               {citRunners.length > 0 && couple && (
-                  <div className="warn" style={{ marginTop: 10 }}>
-                     Enjeu fourni <strong>par cheval</strong> par le PMU (pas par combinaison de 2
-                     chevaux) : l'estimation du rapport couplé est donc <strong>approximative</strong>.
-                  </div>
-               )}
             </div>
          )}
 
@@ -252,11 +438,21 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
 
             {mode === "cote" ? (
                <div className="field" style={{ position: "relative" }}>
-                  <label>{betType === "simple_place" ? "Rapport placé pour 1 €" : "Cote / rapport pour 1 €"}</label>
+                  <label>{betType === "simple_place" ? "Rapport placé pour 1 €" : betType === "couple_gagnant" ? "Rapport Couplé Gagnant pour 1 €" : "Cote / rapport pour 1 €"}</label>
                   <input type="number" step="0.1" min="1" value={rapport} onChange={(e) => setRapport(e.target.value)} />
                   {betType === "simple_place" && (
                      <span className="muted" style={{ position: "absolute", top: "100%", left: 0, marginTop: 3, fontSize: 11 }}>
                         {placeReportHint}
+                     </span>
+                  )}
+                  {betType === "couple_gagnant" && rapport && (
+                     <span className="muted" style={{ position: "absolute", top: "100%", left: 0, marginTop: 3, fontSize: 11 }}>
+                        Rapport probable Couplé PMU (exact, non contractuel) — modifiable.
+                     </span>
+                  )}
+                  {betType === "couple_gagnant" && !rapport && (
+                     <span className="muted" style={{ position: "absolute", top: "100%", left: 0, marginTop: 3, fontSize: 11 }}>
+                        Rapport indisponible pour cette paire (saisie manuelle).
                      </span>
                   )}
                </div>
@@ -284,6 +480,20 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
 
             <div className="field"><label>&nbsp;<button onClick={run}>Estimer le gain</button></label></div>
          </div>
+
+         {couple && betType === "couple_place" && mode === "masses" && (coupleReports?.placeMasses?.totalPool ?? 0) > 0 && (
+            <div style={{ marginTop: 14 }}>
+               {usesCouplePlaceFallback ? (
+                  <div className="warn">
+                     Paire hors des plus jouées : masse reconstruite depuis les enjeux par cheval — estimation <strong>TRÈS approximative</strong>.
+                  </div>
+               ) : (
+                  <div className="info">
+                     Enjeu exact du bloc Couplé Placé — estimation <strong>±30 %</strong> (pari mutuel).
+                  </div>
+               )}
+            </div>
+         )}
 
          {error && <p className="error">{error}</p>}
          {result && (

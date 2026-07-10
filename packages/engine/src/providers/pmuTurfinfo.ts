@@ -18,11 +18,16 @@ import type { BetType, Discipline } from "../types.js";
 import type {
   CitationBetType,
   CitationRunner,
+  CombinationBetType,
+  CombinationMass,
+  CoupleGagnantReport,
   OddsProvider,
   PlaceReport,
   ProviderArrival,
   ProviderArrivalRunner,
   ProviderCitations,
+  ProviderCombinations,
+  ProviderCoupleGagnantReports,
   ProviderPlaceReports,
   ProviderProgramme,
   ProviderRace,
@@ -37,6 +42,11 @@ export interface PmuTurfinfoOptions {
   /** Implémentation de fetch (injectée pour les tests / environnements). */
   fetchImpl?: FetchLike;
   baseUrl?: string;
+}
+
+/** Les montants d'enjeux de l'API PMU sont en centimes ; on les ramène en euros. */
+function centsToEuros(cents: number): number {
+  return Math.round(cents) / 100;
 }
 
 /** Convertit une date ISO (AAAA-MM-JJ) au format PMU JJMMAAAA. */
@@ -75,7 +85,10 @@ const PMU_TYPE_PARI: Record<string, BetType> = {
 /** Mappe un libellé `typePari` PMU vers notre BetType (undefined si inconnu). */
 export function mapTypePari(typePari?: string): BetType | undefined {
   if (!typePari) return undefined;
-  return PMU_TYPE_PARI[typePari.toUpperCase()];
+  const upper = typePari.toUpperCase();
+  // Tolère les deux formes : E_COUPLE_PLACE et COUPLE_PLACE
+  const key = upper.startsWith("E_") ? upper : `E_${upper}`;
+  return PMU_TYPE_PARI[key];
 }
 
 /**
@@ -96,9 +109,48 @@ export function normalizeCitationRunner(
     name: String(raw.nom ?? ""),
     scratched: raw.statut === "NON_PARTANT",
     favoris: raw.favoris === true,
-    enjeu: c1.enjeu,
+    enjeu: centsToEuros(c1.enjeu),
     ratio: typeof c1.ratio === "number" ? c1.ratio : undefined,
   };
+}
+
+/**
+ * Regroupe les rapports Couplé Gagnant bruts par paire non ordonnée [min, max]
+ * et renvoie la MOYENNE des rapports (et tendances) des 2 ordres listés par le
+ * PMU. Ignore toute entrée dont la combinaison n'est pas une paire d'entiers > 0.
+ */
+export function normalizeCoupleGagnantReports(
+  rapports: Array<Record<string, unknown>>,
+): CoupleGagnantReport[] {
+  const round1 = (x: number): number => Math.round(x * 10) / 10;
+  const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / xs.length;
+
+  const groups = new Map<
+    string,
+    { pair: [number, number]; rapports: number[]; tendances: number[] }
+  >();
+
+  for (const r of rapports) {
+    const nums = r.numerosParticipant;
+    if (!Array.isArray(nums) || nums.length !== 2) continue;
+    const a = nums[0] as number;
+    const b = nums[1] as number;
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a <= 0 || b <= 0) continue;
+
+    const [lo, hi] = a <= b ? [a, b] : [b, a];
+    const key = `${lo}-${hi}`;
+    const group =
+      groups.get(key) ?? { pair: [lo, hi] as [number, number], rapports: [], tendances: [] };
+    if (typeof r.rapportDirect === "number") group.rapports.push(r.rapportDirect);
+    if (typeof r.tendance === "number") group.tendances.push(r.tendance);
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values(), (g) => ({
+    pair: g.pair,
+    rapportDirect: g.rapports.length > 0 ? round1(mean(g.rapports)) : 0,
+    tendance: g.tendances.length > 0 ? round1(mean(g.tendances)) : undefined,
+  }));
 }
 
 /**
@@ -326,6 +378,92 @@ export class PmuTurfinfoProvider implements OddsProvider {
   }
 
   /**
+   * Récupère les rapports probables Couplé Gagnant pour les paires gagnantes
+   * (endpoint rapports/E_COUPLE_GAGNANT). Le Couplé Gagnant étant non ordonné,
+   * l'API liste chaque paire 2 fois (les 2 ordres [a,b] et [b,a]) avec des
+   * `rapportDirect` très proches mais parfois différents (gigue/arrondi du tote,
+   * ex. 39 vs 40). On regroupe par clé triée [min, max] et on renvoie la MOYENNE
+   * des ordres — estimation déterministe et stable, indépendante de l'ordre de
+   * la réponse API.
+   */
+  async getCoupleGagnantReports(
+    dateISO: string,
+    reunion: number,
+    course: number,
+  ): Promise<ProviderCoupleGagnantReports> {
+    const pmuDate = toPmuDate(dateISO);
+    let data: unknown;
+    try {
+      data = await this.getJson(
+        `/programme/${pmuDate}/R${reunion}/C${course}/rapports/E_COUPLE_GAGNANT`,
+      );
+    } catch {
+      // API peut renvoyer 204 (vide) ou erreur : renvoyer liste vide
+      return { reunion, course, reports: [] };
+    }
+
+    const raw = data as { rapportsParticipant?: Array<Record<string, unknown>> };
+    const reports = normalizeCoupleGagnantReports(raw.rapportsParticipant ?? []);
+    return { reunion, course, reports };
+  }
+
+  /**
+   * Récupère les masses (enjeux par combinaison) via l'endpoint combinaisons.
+   * Retourne par type de pari (Couplé Gagnant, Couplé Placé, etc.) les paires
+   * les plus jouées et le pool total.
+   */
+  async getCombinations(
+    dateISO: string,
+    reunion: number,
+    course: number,
+  ): Promise<ProviderCombinations> {
+    const pmuDate = toPmuDate(dateISO);
+    let data: unknown;
+    try {
+      data = await this.getJson(`/programme/${pmuDate}/R${reunion}/C${course}/combinaisons`);
+    } catch {
+      // API peut renvoyer 204 (vide) ou erreur : renvoyer liste vide
+      return { reunion, course, betTypes: [] };
+    }
+
+    const raw = data as { combinaisons?: Array<Record<string, unknown>>; updatetime?: number };
+    const combinaisonBlocs = raw.combinaisons ?? [];
+    let updatetime: number | undefined;
+
+    const betTypes: CombinationBetType[] = combinaisonBlocs.map((bloc) => {
+      const rawTypePari = String(bloc.pariType ?? "");
+      const betType = mapTypePari(rawTypePari);
+
+      if (typeof bloc.updatetime === "number") {
+        updatetime = Math.max(updatetime ?? 0, bloc.updatetime);
+      }
+
+      const listeComb = bloc.listeCombinaisons as Array<Record<string, unknown>> | undefined;
+      if (!listeComb) {
+        return { betType, rawTypePari, totalPool: 0, combinations: [] };
+      }
+
+      // Pool = totalEnjeu du bloc (convertir centimes → euros)
+      const totalPool = typeof bloc.totalEnjeu === "number" ? centsToEuros(bloc.totalEnjeu) : 0;
+
+      // Combinations = paires (ou simples à 1 numéro) + enjeu de chaque (convertir centimes → euros)
+      const combinations: CombinationMass[] = listeComb
+        .map((comb) => {
+          const pair = comb.combinaison;
+          const enjeu = comb.totalEnjeu;
+          if (!Array.isArray(pair) || pair.length < 1) return null;
+          if (typeof enjeu !== "number" || enjeu <= 0) return null;
+          return { pair: pair as number[], enjeu: centsToEuros(enjeu) };
+        })
+        .filter((c): c is CombinationMass => c !== null);
+
+      return { betType, rawTypePari, totalPool, combinations };
+    });
+
+    return { reunion, course, updatetime, betTypes };
+  }
+
+  /**
    * Récupère l'ordre d'arrivée définitif d'une course.
    * Course non encore courue ou pas d'arrivée : renvoie une arrivée vide (definitif=false).
    */
@@ -361,4 +499,37 @@ export class PmuTurfinfoProvider implements OddsProvider {
 
     return { ...a, reunion, course };
   }
+}
+
+/**
+ * Fusionne les masses « tous canaux » (endpoint combinaisons) dans les blocs
+ * Simple des citations (qui ne couvrent que les mises INTERNET). Pour chaque bloc
+ * simple_gagnant / simple_place : le pool devient le totalPool tous-canaux, et
+ * l'enjeu de chaque partant devient l'enjeu tous-canaux du cheval (combinaison à
+ * un seul numéro), avec `ratio` recalculé (part du pool en %). Les blocs non-Simple
+ * sont laissés inchangés. Renvoie un nouvel objet (immutabilité).
+ */
+export function mergeSimpleMassesFromCombinations(
+  citations: ProviderCitations,
+  combinations: ProviderCombinations,
+): ProviderCitations {
+  const SIMPLE = new Set(["simple_gagnant", "simple_place"]);
+  const betTypes = citations.betTypes.map((block) => {
+    if (block.betType == null || !SIMPLE.has(block.betType)) return block;
+    const combBlock = combinations.betTypes.find((c) => c.betType === block.betType);
+    if (!combBlock) return block;
+    const enjeuByNumber = new Map<number, number>();
+    for (const comb of combBlock.combinations) {
+      if (comb.pair.length === 1) enjeuByNumber.set(comb.pair[0]!, comb.enjeu);
+    }
+    const totalPool = combBlock.totalPool;
+    const runners = block.runners.map((r) => {
+      const enjeu = enjeuByNumber.get(r.number);
+      if (enjeu == null) return r; // pas d'enjeu tous-canaux pour ce cheval : on garde tel quel
+      const ratio = totalPool > 0 ? (enjeu / totalPool) * 100 : 0;
+      return { ...r, enjeu, ratio };
+    });
+    return { ...block, totalPool, runners };
+  });
+  return { ...citations, betTypes };
 }
