@@ -43,7 +43,7 @@ export default function CitationTable({
                            {r.favoris ? " ★" : ""}
                         </td>
                         <td>{r.enjeu.toLocaleString("fr-FR")}</td>
-                        <td>{r.ratio == null ? "—" : `${r.ratio.toFixed(1)} %`}</td>
+                        <td>{r.ratio == null ? "—" : `${r.ratio.toFixed(2)} %`}</td>
                         <td>{rapport >= 1 ? `${rapport.toFixed(2)} €` : "—"}</td>
                      </tr>
                   );

@@ -355,3 +355,148 @@ describe("getCitations", () => {
     await expect(provider.getCitations("2026-07-04", 6, 2)).rejects.toThrow();
   });
 });
+
+describe("getCoupleGagnantReports", () => {
+  it("normalise les rapports Couplé Gagnant et déduplique par clé triée", async () => {
+    const fakeFetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        rapportsParticipant: [
+          { numerosParticipant: [3, 7], rapportDirect: 45.5, tendance: -2.5 },
+          { numerosParticipant: [7, 3], rapportDirect: 45.5, tendance: -2.5 }, // doublon inversé → dédupliqué
+          { numerosParticipant: [1, 9], rapportDirect: 62.0, tendance: 5.0 },
+        ],
+      }),
+    });
+    const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
+    const reports = await provider.getCoupleGagnantReports("2026-07-04", 4, 7);
+
+    expect(reports.reunion).toBe(4);
+    expect(reports.course).toBe(7);
+    expect(reports.reports).toHaveLength(2); // les 2 ordres regroupés en 1 paire
+    expect(reports.reports[0]).toEqual({ pair: [3, 7], rapportDirect: 45.5, tendance: -2.5 });
+    expect(reports.reports[1]).toEqual({ pair: [1, 9], rapportDirect: 62.0, tendance: 5.0 });
+  });
+
+  it("moyenne les 2 ordres d'une paire et renvoie une paire canonique triée", async () => {
+    const fakeFetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        rapportsParticipant: [
+          { numerosParticipant: [6, 11], rapportDirect: 39, tendance: -2 },
+          { numerosParticipant: [11, 6], rapportDirect: 41, tendance: 0 }, // ordre inversé, rapport différent
+        ],
+      }),
+    });
+    const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
+    const reports = await provider.getCoupleGagnantReports("2026-07-04", 4, 7);
+
+    expect(reports.reports).toHaveLength(1);
+    // Moyenne (39+41)/2 = 40 ; tendance (−2+0)/2 = −1 ; paire triée [6, 11].
+    expect(reports.reports[0]).toEqual({ pair: [6, 11], rapportDirect: 40, tendance: -1 });
+  });
+
+  it("renvoie une liste vide si pas de rapports (204/erreur)", async () => {
+    const provider = new PmuTurfinfoProvider({
+      fetchImpl: async () => ({ ok: false, status: 204, json: async () => ({}) }),
+    });
+    const reports = await provider.getCoupleGagnantReports("2026-07-04", 4, 7);
+    expect(reports.reports).toEqual([]);
+  });
+
+  it("ignore les entrées sans exactement 2 chevaux", async () => {
+    const fakeFetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        rapportsParticipant: [
+          { numerosParticipant: [3], rapportDirect: 45.5 }, // 1 seul → ignoré
+          { numerosParticipant: [1, 9, 5], rapportDirect: 62.0 }, // 3 → ignoré
+          { numerosParticipant: [2, 6], rapportDirect: 35.0 }, // OK
+        ],
+      }),
+    });
+    const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
+    const reports = await provider.getCoupleGagnantReports("2026-07-04", 4, 7);
+    expect(reports.reports).toHaveLength(1);
+    expect(reports.reports[0]?.pair).toEqual([2, 6]);
+  });
+});
+
+describe("getCombinations", () => {
+  it("normalise les combinaisons avec leur pool", async () => {
+    const fakeFetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        combinaisons: [
+          {
+            pariType: "COUPLE_GAGNANT",
+            updatetime: 1_783_185_290_000,
+            totalEnjeu: 5000000,
+            listeCombinaisons: [
+              { combinaison: [3, 7], totalEnjeu: 250000 },
+              { combinaison: [1, 9], totalEnjeu: 180000 },
+            ],
+          },
+          {
+            pariType: "COUPLE_PLACE",
+            updatetime: 1_783_185_300_000, // Plus récent → sera le max
+            totalEnjeu: 3500000,
+            listeCombinaisons: [
+              { combinaison: [3, 7], totalEnjeu: 140000 },
+              { combinaison: [2, 6], totalEnjeu: 98000 },
+            ],
+          },
+        ],
+      }),
+    });
+    const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
+    const combos = await provider.getCombinations("2026-07-04", 4, 7);
+
+    expect(combos.reunion).toBe(4);
+    expect(combos.course).toBe(7);
+    expect(combos.updatetime).toBe(1_783_185_300_000); // max des deux updatetimes
+    expect(combos.betTypes).toHaveLength(2);
+
+    const cg = combos.betTypes.find((b) => b.betType === "couple_gagnant");
+    expect(cg?.rawTypePari).toBe("COUPLE_GAGNANT"); // conserve le libellé original (sans E_)
+    expect(cg?.totalPool).toBe(5000000);
+    expect(cg?.combinations).toHaveLength(2);
+    expect(cg?.combinations[0]).toEqual({ pair: [3, 7], enjeu: 250000 });
+
+    const cp = combos.betTypes.find((b) => b.betType === "couple_place");
+    expect(cp?.rawTypePari).toBe("COUPLE_PLACE");
+    expect(cp?.totalPool).toBe(3500000);
+  });
+
+  it("mappe COUPLE_PLACE (sans préfixe E_) vers couple_place", async () => {
+    const fakeFetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        combinaisons: [
+          {
+            pariType: "COUPLE_PLACE", // sans E_ → mapTypePari tolère les deux
+            totalEnjeu: 3500000,
+            listeCombinaisons: [{ combinaison: [3, 7], totalEnjeu: 140000 }],
+          },
+        ],
+      }),
+    });
+    const provider = new PmuTurfinfoProvider({ fetchImpl: fakeFetch });
+    const combos = await provider.getCombinations("2026-07-04", 4, 7);
+    const cp = combos.betTypes.find((b) => b.rawTypePari === "COUPLE_PLACE");
+    expect(cp?.betType).toBe("couple_place"); // mappé correctement malgré l'absence de E_
+  });
+
+  it("renvoie une liste vide si pas de combinaisons (204/erreur)", async () => {
+    const provider = new PmuTurfinfoProvider({
+      fetchImpl: async () => ({ ok: false, status: 204, json: async () => ({}) }),
+    });
+    const combos = await provider.getCombinations("2026-07-04", 4, 7);
+    expect(combos.betTypes).toEqual([]);
+  });
+});

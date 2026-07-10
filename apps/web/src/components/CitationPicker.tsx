@@ -12,7 +12,7 @@ export default function CitationPicker({
          {runners.map((r) => (
             <button key={r.number} className="secondary" onClick={() => onPick(r)}>
                {r.number} — {r.name}
-               {r.ratio == null ? "" : ` (${r.ratio.toFixed(1)} %)`}
+               {r.ratio == null ? "" : ` (${r.ratio.toFixed(2)} %)`}
             </button>
          ))}
       </div>
