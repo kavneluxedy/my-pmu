@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "predev": "npm run build --workspace @pmu/engine",
-    "dev": "cross-env PORT=3002 tsx watch src/server.ts",
+    "predev": "npm run build --workspace @pmu/engine && node scripts/free-port.mjs",
+    "dev": "cross-env PORT=3001 tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "prestart": "npm run build --workspace @pmu/engine",
     "start": "node dist/server.js",

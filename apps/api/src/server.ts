@@ -22,7 +22,31 @@ await app.register(simRoutes);
 await app.register(statsRoutes);
 await app.register(pmuRoutes);
 
-const port = Number(process.env.PORT ?? 3002);
+const port = Number(process.env.PORT ?? 3001);
+
+// Arrêt gracieux : on ferme Fastify (donc on libère le port) sur chaque signal
+// de fin. Sous Windows, Node émet SIGHUP à la fermeture de la fenêtre console,
+// SIGINT sur Ctrl+C ; SIGTERM couvre les kill explicites. Sans ça, l'enfant
+// lancé par `tsx watch` reste orphelin et garde le port 3001 (« API fantôme »).
+let closing = false;
+async function shutdown(signal: string) {
+  if (closing) return;
+  closing = true;
+  app.log.info(`${signal} reçu, arrêt du serveur…`);
+  try {
+    await app.close();
+    process.exit(0);
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    void shutdown(signal);
+  });
+}
 
 try {
   await app.listen({ port, host: "0.0.0.0" });
