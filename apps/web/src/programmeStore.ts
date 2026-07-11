@@ -40,6 +40,19 @@ const REFRESH_MS = 30_000;
  */
 export function useProgrammePolling(): void {
   useEffect(() => {
+    // Amorçage : charger le programme du jour si le store est vide, pour que la
+    // bannière « prochaine course » s'affiche sans devoir passer par Import PMU.
+    // Uniquement si rien n'est chargé, afin de ne pas écraser une autre date que
+    // l'utilisateur aurait sélectionnée manuellement.
+    if (!getProgrammeStore()) {
+      const today = new Date().toISOString().slice(0, 10);
+      api
+        .programme(today)
+        .then((prog) => setProgrammeStore(prog))
+        .catch(() => {
+          // Silencieux : le prochain tick de resynchronisation réessaiera.
+        });
+    }
     const tick = () => {
       const current = getProgrammeStore();
       if (!current) return; // rien à rafraîchir tant qu'aucun programme n'est chargé

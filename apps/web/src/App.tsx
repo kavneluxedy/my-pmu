@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useProgrammeStore, useProgrammePolling } from "./programmeStore.js";
+import { useProgrammePolling, useProgrammeStore } from "./programmeStore.js";
 
 const links = [
   { to: "/", label: "Tableau de bord", icon: "⊞", end: true },
@@ -26,7 +26,7 @@ function formatMmSs(ms: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function NextRaceWidget({ collapsed }: { collapsed: boolean }) {
+function NextRaceWidget({ collapsed = false, topbar = false }: Readonly<{ collapsed?: boolean; topbar?: boolean }>) {
   const navigate = useNavigate();
   const programme = useProgrammeStore();
   const [now, setNow] = useState(() => Date.now());
@@ -77,6 +77,22 @@ function NextRaceWidget({ collapsed }: { collapsed: boolean }) {
     nextImminent || deltaMs <= 60_000 ? "red" : deltaMs <= 180_000 ? "orange" : "green";
   const color = TONE_COLORS[tone];
   const time = new Date(nextTs).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+  if (topbar) {
+    return (
+      <div
+        className="next-race-topbar"
+        onClick={() => navigate(`/import?reunion=${nextReunion}&course=${nextCourse}`)}
+        style={{ borderColor: color, background: `${color}18` }}
+      >
+        <span style={{ fontSize: 13 }}>⏱</span>
+        <span className="nrt-rc">R{nextReunion} C{nextCourse}</span>
+        <span className="nrt-hippo">{nextHippo}</span>
+        <span className="nrt-time">{time}</span>
+        <span className="nrt-badge" style={{ background: color }}>{label}</span>
+      </div>
+    );
+  }
 
   if (collapsed) {
     return (
@@ -179,19 +195,22 @@ export default function App() {
         />
       )}
 
-      {/* Hamburger button (visible sur mobile) */}
+      {/* Barre supérieure mobile : hamburger + bannière prochaine course */}
       {isMobile && (
-        <button
-          className="hamburger-menu"
-          onClick={() => setMobileMenuOpen((o) => !o)}
-          aria-label="Ouvrir le menu de navigation"
-          aria-expanded={mobileMenuOpen}
-          aria-controls="sidebar-nav"
-        >
-          <span />
-          <span />
-          <span />
-        </button>
+        <div className="mobile-topbar">
+          <button
+            className="hamburger-menu"
+            onClick={() => setMobileMenuOpen((o) => !o)}
+            aria-label="Ouvrir le menu de navigation"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="sidebar-nav"
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+          <NextRaceWidget topbar />
+        </div>
       )}
 
       <nav className="sidebar" id="sidebar-nav">
@@ -222,7 +241,7 @@ export default function App() {
 
         {/* Zone fixe en bas : widget + toggle */}
         <div className="sidebar-bottom">
-          <NextRaceWidget collapsed={collapsed} />
+          {!isMobile && <NextRaceWidget collapsed={collapsed} />}
           {!isMobile && (
             <button
               className="sidebar-toggle"
