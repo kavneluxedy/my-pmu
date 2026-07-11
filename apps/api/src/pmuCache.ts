@@ -21,7 +21,7 @@ const provider = new PmuTurfinfoProvider();
  * Programme comme course sont sensibles au temps (heures/imminence de départ et
  * cotes qui bougent en direct) : on garde les deux caches courts.
  */
-const TTL_PROGRAMME_MS = 1000 * 30; // 30 s
+const TTL_PROGRAMME_MS = 1000 * 60; // 60 s
 // Les cotes des partants bougent jusqu'au départ ; on garde le cache court pour
 // que le polling du simulateur (~30 s) obtienne des cotes réellement fraîches.
 const TTL_RACE_MS = 1000 * 30; // 30 s

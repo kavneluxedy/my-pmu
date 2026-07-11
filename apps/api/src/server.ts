@@ -22,7 +22,7 @@ await app.register(simRoutes);
 await app.register(statsRoutes);
 await app.register(pmuRoutes);
 
-const port = Number(process.env.PORT ?? 3001);
+const port = Number(process.env.PORT ?? 3002);
 
 try {
   await app.listen({ port, host: "0.0.0.0" });
