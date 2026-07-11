@@ -22,6 +22,7 @@ export default function ImportPmu() {
   const [loading, setLoading] = useState(false);
   const now = useAppClock();
   const autoLoadedRef = useRef(false);
+  const racePanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const reunion = Number(searchParams.get("reunion"));
@@ -36,7 +37,12 @@ export default function ImportPmu() {
         setProgrammeStore(prog);
         return api.course(today, reunion, course);
       })
-      .then((r) => setRace(r))
+      .then((r) => {
+        setRace(r);
+        requestAnimationFrame(() => {
+          racePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [searchParams]);
@@ -139,7 +145,7 @@ export default function ImportPmu() {
       })()}
 
       {race && (
-        <div className="panel">
+        <div className="panel" ref={racePanelRef}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <h3 style={{ margin: 0 }}>R{race.reunion} C{race.course} — Partants &amp; cotes</h3>
