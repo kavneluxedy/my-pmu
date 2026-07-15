@@ -1,5 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import type { ProviderArrival } from "@pmu/engine";
 import { mergeSimpleMassesFromCombinations } from "@pmu/engine";
 import { z } from "zod";
 import { getCitations, getArrival, getPlaceReports, getProgramme, getRace, getCoupleGagnantReports, getCombinations } from "../pmuCache.js";
@@ -97,10 +96,6 @@ export async function pmuRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     try {
       const arrival = await getArrival(parsed.data, Number(p.reunion), Number(p.course));
-      // Persistance conditionnelle si arrivée définitive.
-      if (arrival.definitif) {
-        await persistArrivalIfFavorite(parsed.data, Number(p.reunion), Number(p.course), arrival);
-      }
       // Enrichir chaque partant avec inFavorites (booléen indiquant si ce cheval est dans « Mes chevaux »).
       const favoriteNames = await favoriteHorseNames();
       const enriched = {
@@ -194,66 +189,4 @@ export async function pmuRoutes(app: FastifyInstance): Promise<void> {
 async function favoriteHorseNames(): Promise<Set<string>> {
   const favoriteHorses = await prisma.horse.findMany({ select: { name: true } });
   return new Set(favoriteHorses.map((h) => normalizeName(h.name)));
-}
-
-/**
- * Persiste l'arrivée en base si la course contient au moins un favori.
- * Favori (décision « les deux ») =
- *   (1) un Runner de cette course sans cheval lié (legacy), OU
- *   (2) un partant dont le nom matche un Horse existant (par nom normalisé).
- * Dans ce cas, on upsert Meeting/Race puis chaque partant classé avec sa position
- * d'arrivée. Sinon, on ne persiste rien (l'arrivée reste seulement affichée/cachée).
- */
-async function persistArrivalIfFavorite(
-  dateISO: string,
-  reunion: number,
-  course: number,
-  arrival: ProviderArrival,
-): Promise<void> {
-  // Partants réels (noms + numéros) : l'arrivée PMU ne fournit que des numéros.
-  let race;
-  try {
-    race = await getRace(dateISO, reunion, course);
-  } catch {
-    return; // Sans les partants, on ne peut ni matcher les noms ni nommer les Runners.
-  }
-  const runnersByNumber = new Map(race.runners.map((r) => [r.number, r]));
-
-  // Critère : un partant correspond à un cheval de « Mes chevaux ».
-  const favoriteHorses = await prisma.horse.findMany({ select: { name: true } });
-  const favoriteNames = new Set(favoriteHorses.map((h) => normalizeName(h.name)));
-  const hasHorseFavorite = race.runners.some((r) => favoriteNames.has(normalizeName(r.name)));
-
-  if (!hasHorseFavorite) return; // Aucun favori : pas de persistance.
-
-  // Upsert Meeting/Race pour garantir leur existence.
-  const meetingRow = await prisma.meeting.upsert({
-    where: { date_reunion: { date: dateISO, reunion } },
-    create: { date: dateISO, reunion, hippodrome: "" },
-    update: {},
-  });
-  const raceRow = await prisma.race.upsert({
-    where: { meetingId_course: { meetingId: meetingRow.id, course } },
-    create: { meetingId: meetingRow.id, course },
-    update: {},
-  });
-
-  // Upsert chaque partant classé avec sa position d'arrivée.
-  const existingRunners = await prisma.runner.findMany({ where: { raceId: raceRow.id } });
-  const existingByNumber = new Map(existingRunners.map((r) => [r.number, r]));
-  for (const arrivalRunner of arrival.ordre) {
-    const providerRunner = runnersByNumber.get(arrivalRunner.number);
-    const name = providerRunner?.name ?? "";
-    const existing = existingByNumber.get(arrivalRunner.number);
-    if (existing) {
-      await prisma.runner.update({
-        where: { id: existing.id },
-        data: { arrivalPosition: arrivalRunner.position, ...(name ? { name } : {}) },
-      });
-    } else {
-      await prisma.runner.create({
-        data: { raceId: raceRow.id, number: arrivalRunner.number, name, arrivalPosition: arrivalRunner.position },
-      });
-    }
-  }
 }

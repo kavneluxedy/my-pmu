@@ -6,7 +6,6 @@ const betSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   betType: z.string().min(1),
   label: z.string().optional(),
-  raceId: z.number().int().optional(),
   stake: z.number().positive(),
   odds: z.number().positive().optional(),
   status: z.enum(["pending", "won", "lost"]).optional(),

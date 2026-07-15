@@ -5,6 +5,7 @@ import App from "./App.js";
 import Dashboard from "./pages/Dashboard.js";
 import Bets from "./pages/Bets.js";
 import Horses from "./pages/Horses.js";
+import MesCourses from "./pages/MesCourses.js";
 import Simulator from "./pages/Simulator.js";
 import ImportPmu from "./pages/ImportPmu.js";
 import Arrivees from "./pages/Arrivees.js";
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
       { path: "horses", element: <Horses /> },
       { path: "simulator", element: <Simulator /> },
       { path: "import", element: <ImportPmu /> },
+      { path: "mes-courses", element: <MesCourses /> },
       { path: "arrivees", element: <Arrivees /> },
     ],
   },

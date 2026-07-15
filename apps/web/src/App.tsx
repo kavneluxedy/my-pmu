@@ -9,6 +9,7 @@ const links = [
   { to: "/horses", label: "Mes chevaux", icon: "🐎", end: false },
   { to: "/simulator", label: "Simulateur", icon: "⚡", end: false },
   { to: "/import", label: "Import PMU", icon: "↓", end: false },
+  { to: "/mes-courses", label: "Mes courses", icon: "🏇", end: false },
   { to: "/arrivees", label: "Arrivées", icon: "🏁", end: false },
 ];
 

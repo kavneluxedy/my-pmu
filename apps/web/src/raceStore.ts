@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from "react";
 import { api, type ProviderRace } from "./api/client.js";
+import { useProgrammeStore } from "./programmeStore.js";
 
 const EVENT = "pmu:race-loaded";
 
@@ -82,4 +83,46 @@ export function useRacePolling(): void {
     }, RACE_REFRESH_MS);
     return () => clearInterval(id);
   }, []);
+}
+
+/** Marge avant le départ pour capturer les toutes dernières cotes (ms). */
+const REFRESH_BEFORE_START_MS = 10_000;
+
+/**
+ * Programme un rafraîchissement unique des cotes ~10 s avant le départ de la
+ * course chargée, en complément du polling 30 s : c'est le meilleur instant pour
+ * figer les cotes les plus fraîches (elles bougent fort en toute fin de pari).
+ *
+ * `startTime` (epoch ms absolu) n'est pas porté par la `ProviderRace` du store
+ * mais par le programme ; on le récupère via `useProgrammeStore()` en croisant
+ * reunion/course (même logique que ImportPmu). Si le PMU recale l'heure de
+ * départ (polling programme), l'effet se relance et reprogramme le timer.
+ * No-op tant qu'aucune course n'est chargée ou que le départ est déjà à moins de
+ * 10 s (le polling 30 s couvre alors le reste).
+ */
+export function useRaceRefreshBeforeStart(): void {
+  const programme = useProgrammeStore();
+  const stored = getStoredRace();
+  const reunion = stored?.race.reunion;
+  const course = stored?.race.course;
+
+  const startTime = programme?.meetings
+    .find((m) => m.reunion === reunion)
+    ?.races.find((c) => c.course === course)?.startTime;
+
+  useEffect(() => {
+    if (reunion == null || course == null || typeof startTime !== "number") return;
+    const delay = startTime - Date.now() - REFRESH_BEFORE_START_MS;
+    if (delay <= 0) return; // Déjà à moins de 10 s / départ passé : rien à planifier.
+    const id = setTimeout(() => {
+      // Garde-fou : ne rafraîchir que si la course chargée n'a pas changé entre-temps.
+      const current = getStoredRace();
+      if (current?.race.reunion === reunion && current?.race.course === course) {
+        refreshRace().catch(() => {
+          // Silencieux : le polling 30 s réessaiera.
+        });
+      }
+    }, delay);
+    return () => clearTimeout(id);
+  }, [reunion, course, startTime]);
 }

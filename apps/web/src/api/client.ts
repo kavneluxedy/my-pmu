@@ -179,6 +179,22 @@ export interface CoupleReports {
   placeMasses: { totalPool: number; combinations: CombinationMass[] };
 }
 
+/**
+ * Course sauvegardée durablement par l'utilisateur (snapshot figé en DB).
+ * `payload` est le JSON sérialisé d'une ProviderRace : partants + cotes telles
+ * qu'affichées au moment de la sauvegarde, rechargeables sans re-fetch PMU.
+ */
+export interface SavedRace {
+  id: number;
+  date: string;
+  reunion: number;
+  course: number;
+  label?: string | null;
+  startTime?: number | null;
+  payload: string;
+  savedAt: string;
+}
+
 export const api = {
   // Chevaux
   listHorses: () => request<Horse[]>("/api/horses"),
@@ -228,4 +244,13 @@ export const api = {
     request<ProviderPlaceReports>(`/api/pmu/place-reports/${date}/${reunion}/${course}`),
   coupleReports: (date: string, reunion: number, course: number) =>
     request<CoupleReports>(`/api/pmu/couple-reports/${date}/${reunion}/${course}`),
+
+  // Courses sauvegardées
+  listSavedRaces: () => request<SavedRace[]>("/api/saved-races"),
+  createSavedRace: (
+    data: Pick<SavedRace, "date" | "reunion" | "course" | "payload"> &
+      Partial<Pick<SavedRace, "label" | "startTime">>,
+  ) => request<SavedRace>("/api/saved-races", { method: "POST", body: JSON.stringify(data) }),
+  deleteSavedRace: (id: number) =>
+    request<void>(`/api/saved-races/${id}`, { method: "DELETE" }),
 };

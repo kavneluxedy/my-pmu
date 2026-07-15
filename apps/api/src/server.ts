@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { betRoutes } from "./routes/bets.js";
 import { horseRoutes } from "./routes/horses.js";
 import { pmuRoutes } from "./routes/pmu.js";
+import { savedRaceRoutes } from "./routes/savedRaces.js";
 import { simRoutes } from "./routes/sim.js";
 import { statsRoutes } from "./routes/stats.js";
 import { transactionRoutes } from "./routes/transactions.js";
@@ -21,6 +22,7 @@ await app.register(transactionRoutes);
 await app.register(simRoutes);
 await app.register(statsRoutes);
 await app.register(pmuRoutes);
+await app.register(savedRaceRoutes);
 
 const port = Number(process.env.PORT ?? 3001);
 

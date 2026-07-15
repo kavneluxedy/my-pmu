@@ -3,6 +3,7 @@ import { api, DutchingResult, ValueBetResult } from "../api/client.js";
 import AddToBetsButton from "../components/AddToBetsButton.js";
 import RefreshOddsButton from "../components/RefreshOddsButton.js";
 import RunnerPicker from "../components/RunnerPicker.js";
+import SaveRaceButton from "../components/SaveRaceButton.js";
 import { useCitations } from "../hooks/useCitations.js";
 import { useQuickAddBet } from "../hooks/useQuickAddBet.js";
 import { useSortable } from "../hooks/useSortable.js";
@@ -11,7 +12,7 @@ import { parseNums, tryEvaluate } from "../lib/calc.js";
 import { citationBlockFor } from "../lib/citation.js";
 import { RunnerSummary } from "../lib/runner.js";
 import { roundStakeToEuro } from "../lib/stake.js";
-import { getStoredRace, useRacePolling, useRaceStore } from "../raceStore.js";
+import { getStoredRace, useRacePolling, useRaceRefreshBeforeStart, useRaceStore } from "../raceStore.js";
 import PayoutTab from "./PayoutTab.js";
 
 type Tab = "dutching" | "valuebet" | "payout";
@@ -34,6 +35,7 @@ export default function Simulator() {
   const runners = activeRunners(race);
 
   useRacePolling();
+  useRaceRefreshBeforeStart();
 
   return (
     <div>
@@ -57,7 +59,10 @@ export default function Simulator() {
             {" — "}{runners.length} partants.
             {" "}Les cotes se rafraîchissent automatiquement.
           </span>
-          <RefreshOddsButton />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <RefreshOddsButton />
+            <SaveRaceButton />
+          </div>
         </div>
       )}
 
