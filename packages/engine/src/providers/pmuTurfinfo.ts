@@ -295,13 +295,22 @@ export class PmuTurfinfoProvider implements OddsProvider {
 
   async getRace(dateISO: string, reunion: number, course: number): Promise<ProviderRace> {
     const pmuDate = toPmuDate(dateISO);
-    const data = (await this.getJson(
-      `/programme/${pmuDate}/R${reunion}/C${course}/participants`,
-    )) as { participants?: Array<Record<string, unknown>> };
+    const [data, programme] = await Promise.all([
+      this.getJson(`/programme/${pmuDate}/R${reunion}/C${course}/participants`) as Promise<{
+        participants?: Array<Record<string, unknown>>;
+      }>,
+      this.getProgramme(dateISO),
+    ]);
     const participants = data.participants ?? [];
+    const meeting = programme.meetings.find((m) => m.reunion === reunion);
+    const raceInfo = meeting?.races.find((r) => r.course === course);
     return {
       reunion,
       course,
+      name: raceInfo?.name,
+      discipline: raceInfo?.discipline,
+      distance: raceInfo?.distance,
+      startTime: raceInfo?.startTime,
       runners: participants.map(normalizeRunner),
     };
   }
