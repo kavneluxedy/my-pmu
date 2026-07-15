@@ -5,7 +5,6 @@
 import {
   analyzeValueBet,
   computePayout,
-  computeTicketCost,
   dutchByBudget,
   dutchByTargetProfit,
   type BetType,
@@ -13,16 +12,6 @@ import {
 } from "@pmu/engine";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-
-const ticketSchema = z.object({
-  betType: z.string(),
-  selection: z.object({
-    bases: z.array(z.number().int()).optional(),
-    associated: z.array(z.number().int()).min(1),
-    ordered: z.boolean().optional(),
-  }),
-  unitStake: z.number().positive(),
-});
 
 const dutchingSchema = z.object({
   selections: z
@@ -83,17 +72,6 @@ const payoutSchema = z
   );
 
 export async function simRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/sim/ticket", async (req, reply) => {
-    const parsed = ticketSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    try {
-      const { betType, selection, unitStake } = parsed.data;
-      return computeTicketCost(betType as BetType, selection, unitStake);
-    } catch (e) {
-      return reply.code(422).send({ error: (e as Error).message });
-    }
-  });
-
   app.post("/api/sim/dutching", async (req, reply) => {
     const parsed = dutchingSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });

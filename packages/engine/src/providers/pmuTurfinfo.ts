@@ -317,10 +317,16 @@ export class PmuTurfinfoProvider implements OddsProvider {
     course: number,
   ): Promise<ProviderPlaceReports> {
     const pmuDate = toPmuDate(dateISO);
-    const data = (await this.getJson(
-      `/programme/${pmuDate}/R${reunion}/C${course}/rapports/E_SIMPLE_PLACE`,
-    )) as { rapportsParticipant?: Array<Record<string, unknown>> };
-    const liste = data.rapportsParticipant ?? [];
+    let data: unknown;
+    try {
+      data = await this.getJson(
+        `/programme/${pmuDate}/R${reunion}/C${course}/rapports/E_SIMPLE_PLACE`,
+      );
+    } catch {
+      // API peut renvoyer 204 (vide) ou erreur : renvoyer liste vide
+      return { reunion, course, runners: [] };
+    }
+    const liste = (data as { rapportsParticipant?: Array<Record<string, unknown>> }).rapportsParticipant ?? [];
     const runners: PlaceReport[] = liste
       .map((r) => {
         const numPmu = Number(r.numPmu ?? 0);

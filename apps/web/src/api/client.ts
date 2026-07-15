@@ -49,13 +49,6 @@ export interface BankrollStats {
   balanceCurve: { date: string; balance: number }[];
 }
 
-export interface TicketCost {
-  betType: string;
-  combinations: number;
-  unitStake: number;
-  totalCost: number;
-}
-
 export interface DutchingResult {
   legs: { selection: number | string; odds: number; stake: number; grossReturn: number }[];
   totalStake: number;
@@ -215,8 +208,6 @@ export const api = {
   bankroll: () => request<BankrollStats>("/api/stats/bankroll"),
 
   // Simulations
-  simTicket: (body: unknown) =>
-    request<TicketCost>("/api/sim/ticket", { method: "POST", body: JSON.stringify(body) }),
   simDutching: (body: unknown) =>
     request<DutchingResult>("/api/sim/dutching", { method: "POST", body: JSON.stringify(body) }),
   simValueBet: (body: unknown) =>

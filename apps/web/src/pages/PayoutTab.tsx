@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
    api,
    type PayoutResult,
 } from "../api/client.js";
+import AddToBetsButton from "../components/AddToBetsButton.js";
 import CitationPicker from "../components/CitationPicker.js";
 import CitationTable from "../components/CitationTable.js";
 import CouplePicker from "../components/CouplePicker.js";
@@ -97,11 +98,16 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
       }
    }, [betType, reloadCoupleReports]);
 
+   // Simple Placé : le rapport probable PMU n'est utilisé qu'en mode « cote »
+   // (pré-remplissage) ; en mode « masses », inutile de l'interroger. Couplé
+   // Placé, lui, affiche le rapport individuel à côté de l'enjeu dans les deux
+   // modes (CouplePicker), donc on le charge dans tous les cas.
    useEffect(() => {
-      if ((betType === "simple_place" || betType === "couple_place") && getStoredRace()) {
+      if (!getStoredRace()) return;
+      if (betType === "couple_place" || (betType === "simple_place" && mode === "cote")) {
          void reloadPlaceReports();
       }
-   }, [betType, reloadPlaceReports]);
+   }, [betType, mode, reloadPlaceReports]);
 
    useEffect(() => {
       if (mode !== "cote" || betType !== "simple_place" || selectedNumber == null) return;
@@ -125,13 +131,22 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
       setRapport(medianRapport(pr).toFixed(2));
    }, [mode, betType, rapport, runners, placeReports, selectedNumber]);
 
-   const pickCitation = (enjeu: number) => {
+   const pickCitation = (number: number, enjeu: number) => {
       if (!citBlock) return;
+      setSelectedNumber(number);
       setTotalPool(String(citBlock.totalPool));
       setStakeOnSelection(String(enjeu));
    };
 
+   // Ne réinitialise la sélection/le rapport que lors d'un VRAI changement de
+   // type de pari (comparaison à la valeur précédente, pas un simple flag
+   // « premier rendu » : React.StrictMode double-invoque les effets en dev,
+   // ce qui consommerait un flag « premier rendu » dès le montage et
+   // déclencherait quand même la réinitialisation, effaçant "4.5").
+   const prevBetType = useRef(betType);
    useEffect(() => {
+      if (prevBetType.current === betType) return;
+      prevBetType.current = betType;
       setSelectedNumber(null);
       setSelectedRapportKind(null);
       setRapport("");
@@ -437,7 +452,11 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                   </button>
                </div>
                {citRunners.length > 0 && (
-                  <CitationPicker runners={citRunners} onPick={(r) => pickCitation(r.enjeu)} />
+                  <CitationPicker
+                     runners={citRunners}
+                     selectedNumber={selectedNumber}
+                     onPick={(r) => pickCitation(r.number, r.enjeu)}
+                  />
                )}
             </div>
          )}
@@ -532,6 +551,26 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                   Gain brut : <strong style={{ color: "#35c46a" }}>{result.grossPayout.toFixed(2)} €</strong>
                   {" — "}dont bénéfice net : <strong>{result.netProfit.toFixed(2)} €</strong>
                   {" "}(mise {result.stake.toFixed(2)} € récupérée en cas de gain).
+               </div>
+               <div style={{ marginTop: 12 }}>
+                  <AddToBetsButton
+                     label="🎫 Ajouter à Mes paris"
+                     defaultStake={result.stake}
+                     minStake={minStakeFor(betType)}
+                     disabled={result.rapportBrutPourUnEuro <= 0}
+                     getDraft={(date, stake) => {
+                        const stored = getStoredRace();
+                        const ctx = stored ? `R${stored.race.reunion}C${stored.race.course} - ` : "";
+                        const who = selectedNumber != null ? `n°${selectedNumber}` : BET_TYPE_LABELS[betType];
+                        return {
+                           date,
+                           betType,
+                           label: `${ctx}${who}`,
+                           stake,
+                           odds: Number(result.rapportBrutPourUnEuro.toFixed(2)),
+                        };
+                     }}
+                  />
                </div>
             </div>
          )}

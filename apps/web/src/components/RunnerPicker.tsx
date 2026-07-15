@@ -30,10 +30,10 @@ export default function RunnerPicker({
                   onClick={() => onPick(r)}
                >
                   <span>{r.number} — {r.name}</span>
-                  {range && (
+                  {range && r.odds != null && (
                      <OddsBadge
-                        odds={r.odds!}
-                        color={oddsGradientColor(r.odds!, range.min, range.max)}
+                        odds={r.odds}
+                        color={oddsGradientColor(r.odds, range.min, range.max)}
                         favorite={r.number === favNumber}
                         onDark={selected}
                      />
