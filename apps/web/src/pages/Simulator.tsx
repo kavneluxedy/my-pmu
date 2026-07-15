@@ -56,6 +56,7 @@ export default function Simulator() {
         >
           <span className="muted" style={{ fontSize: 13 }}>
             Course chargée : <strong>R{race.reunion} C{race.course}</strong>
+            {race.name && <>{" — "}<strong>{race.name}</strong></>}
             {" — "}{runners.length} partants.
             {" "}Les cotes se rafraîchissent automatiquement.
           </span>
