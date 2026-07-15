@@ -16,10 +16,16 @@ import PayoutTab from "./PayoutTab.js";
 
 type Tab = "dutching" | "valuebet" | "payout";
 
-/** Partants actifs (non non-partants) avec cote disponible. */
+/**
+ * Partants actifs (non non-partants). On NE filtre PAS sur la présence de cote :
+ * l'API PMU cesse de fournir `odds` une fois les paris clôturés / la course
+ * passée, mais les partants doivent rester visibles dans les 3 onglets (avec
+ * saisie manuelle possible pour Dutching/ValueBet, et calcul par masses pour
+ * Payout). Le badge de cote s'affiche quand `odds` est connu, sinon rien.
+ */
 function activeRunners(race: ReturnType<typeof useRaceStore>) {
   if (!race) return [];
-  return race.runners.filter((r) => !r.scratched && r.odds != null);
+  return race.runners.filter((r) => !r.scratched);
 }
 
 export default function Simulator() {
@@ -48,7 +54,7 @@ export default function Simulator() {
         >
           <span className="muted" style={{ fontSize: 13 }}>
             Course chargée : <strong>R{race.reunion} C{race.course}</strong>
-            {" — "}{runners.length} partants avec cote.
+            {" — "}{runners.length} partants.
             {" "}Les cotes se rafraîchissent automatiquement.
           </span>
           <RefreshOddsButton />
@@ -107,12 +113,20 @@ function DutchingTab({ runners }: { runners: RunnerSummary[] }) {
     try {
       let selections: { selection: number | string; odds: number }[];
       if (hasRace) {
-        if (selectedRunners.length < 2) {
-          setError("Sélectionnez au moins deux partants pour le dutching.");
+        // Le dutching se calcule à partir des cotes : on ne retient que les
+        // partants sélectionnés dont la cote est connue (l'API PMU peut ne plus
+        // la fournir une fois les paris clôturés).
+        const withOdds = selectedRunners.filter((r) => r.odds != null);
+        if (withOdds.length < 2) {
+          setError(
+            selectedRunners.length >= 2
+              ? "Cotes indisponibles pour les partants sélectionnés : le dutching nécessite au moins deux cotes connues."
+              : "Sélectionnez au moins deux partants (avec cote) pour le dutching.",
+          );
           return;
         }
         // Cotes fraîches relues au moment du calcul + libellé n° + nom conservé.
-        selections = selectedRunners.map((r) => ({
+        selections = withOdds.map((r) => ({
           selection: `${r.number} ${r.name}`,
           odds: r.odds!,
         }));
@@ -274,10 +288,11 @@ function ValueBetTab({ runners }: { runners: RunnerSummary[] }) {
       ? undefined
       : citBlock?.runners.find((r) => r.number === selectedNumber)?.ratio;
 
-  // Quand on sélectionne un partant PMU, on remplit la cote automatiquement.
+  // Quand on sélectionne un partant PMU, on remplit la cote automatiquement
+  // (si connue ; sinon on laisse le champ tel quel pour saisie manuelle).
   const pickRunner = (r: RunnerSummary) => {
     setSelectedNumber(r.number);
-    setOdds(r.odds!.toFixed(2));
+    if (r.odds != null) setOdds(r.odds.toFixed(2));
   };
 
   // Garde la cote du partant sélectionné synchronisée avec les cotes fraîches ;
@@ -287,8 +302,8 @@ function ValueBetTab({ runners }: { runners: RunnerSummary[] }) {
     const r = runners.find((x) => x.number === selectedNumber);
     if (!r) {
       setSelectedNumber(null);
-    } else {
-      setOdds(r.odds!.toFixed(2));
+    } else if (r.odds != null) {
+      setOdds(r.odds.toFixed(2));
     }
   }, [runners, selectedNumber]);
 
