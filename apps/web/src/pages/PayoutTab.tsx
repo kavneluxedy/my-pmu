@@ -48,17 +48,19 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    const needsRunnersCount = betType === "simple_place";
    const canPickOdds = mode === "cote" && !couple;
 
-   // Runners réels pour le CouplePicker. `runners` (prop) est filtré par les
-   // parents sur `odds != null` (cote Simple Gagnant connue) : inadapté pour le
-   // Couplé, qui n'a rien à voir avec cette cote et peut être vide/partiel au
-   // moment où l'onglet Couplé est ouvert. On repart donc de la course complète
-   // en store (tous les partants réels, non-scratched) plutôt que de la prop.
+   // Tous les partants actifs (non-scratched), indépendamment de la disponibilité
+   // de la cote. `runners` (prop) est filtré par le parent `Simulator.tsx` sur
+   // `odds != null` (pour Dutching/ValueBet qui en ont besoin), mais Payout doit
+   // afficher les partants même sans cote — on recalcule la liste ici en amont,
+   // depuis la course en store (source de vérité pour tous les partants réels).
+   // Fallback vers la prop `runners` (déjà filtrée à minima) si aucune course n'est
+   // en session (ex: juste après un import, avant la première actualisation).
    const storedRaceRunners = getStoredRace()?.race.runners.filter((r) => !r.scratched) ?? [];
-   const realRunners: RunnerSummary[] =
+   const allAvailableRunners: RunnerSummary[] =
       storedRaceRunners.length > 0 ? storedRaceRunners : runners;
 
-   const favNumber = favoriteNumber(runners);
-   const oddsRangeForRunners = oddsRange(runners);
+   const favNumber = favoriteNumber(allAvailableRunners);
+   const oddsRangeForRunners = oddsRange(allAvailableRunners);
 
    const selectedPlaceReport =
       mode === "cote" && betType === "simple_place" && selectedNumber != null
@@ -75,18 +77,18 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    }
 
    useEffect(() => {
-      if (runners.length > 0) setRunnersCount(String(runners.length));
-   }, [runners]);
+      if (allAvailableRunners.length > 0) setRunnersCount(String(allAvailableRunners.length));
+   }, [allAvailableRunners]);
 
    // Purge la sélection seulement si le partant a réellement disparu (non-partant,
    // course changée). On NE réinitialise PAS à chaque rafraîchissement des cotes,
    // pour que le pick de l'utilisateur reste visible et stable.
    useEffect(() => {
-      if (selectedNumber != null && !runners.some((r) => r.number === selectedNumber)) {
+      if (selectedNumber != null && !allAvailableRunners.some((r) => r.number === selectedNumber)) {
          setSelectedNumber(null);
          setSelectedRapportKind(null);
       }
-   }, [runners, selectedNumber]);
+   }, [allAvailableRunners, selectedNumber]);
 
    useEffect(() => {
       if (mode === "masses") void reloadCitations();
@@ -122,14 +124,14 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
    useEffect(() => {
       if (mode !== "cote" || betType !== "simple_place" || rapport !== "") return;
       if (selectedNumber != null) return;
-      const r = runners.find((x) => placeReports.some((p) => p.number === x.number));
+      const r = allAvailableRunners.find((x) => placeReports.some((p) => p.number === x.number));
       if (!r) return;
       const pr = placeReports.find((p) => p.number === r.number);
       if (!pr) return;
       setSelectedNumber(r.number);
       setSelectedRapportKind("median");
       setRapport(medianRapport(pr).toFixed(2));
-   }, [mode, betType, rapport, runners, placeReports, selectedNumber]);
+   }, [mode, betType, rapport, allAvailableRunners, placeReports, selectedNumber]);
 
    const pickCitation = (number: number, enjeu: number) => {
       if (!citBlock) return;
@@ -261,7 +263,7 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
             reconstruit selon la mécanique du pari mutuel).
          </p>
 
-         {canPickOdds && runners.length > 0 && (
+         {canPickOdds && allAvailableRunners.length > 0 && (
             <div style={{ marginBottom: 14 }}>
                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
                   {betType === "simple_place"
@@ -269,7 +271,7 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                      : "Choisir un partant (remplit la cote automatiquement)"}
                </div>
                <div style={{ display: "flex", flexWrap: "wrap", gap: betType === "simple_place" ? 10 : 6 }}>
-                  {runners.map((r) => {
+                  {allAvailableRunners.map((r) => {
                      const runnerLabel = `${r.number} — ${r.name}`;
 
                      if (betType === "simple_place") {
@@ -354,7 +356,7 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                         ? "Chargement des rapports Couplé…"
                         : coupleError
                            ? `Rapports Couplé indisponibles : ${coupleError}`
-                           : realRunners.length > 0
+                           : allAvailableRunners.length > 0
                               ? "Choisir 2 partants (remplit le rapport depuis le PMU)"
                               : "Aucune donnée disponible"}
                   </span>
@@ -369,9 +371,9 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                      </button>
                   )}
                </div>
-               {realRunners.length > 0 && (
+               {allAvailableRunners.length > 0 && (
                   <CouplePicker
-                     runners={realRunners}
+                     runners={allAvailableRunners}
                      betType={betType}
                      placeReports={placeReports}
                      onPick={pickCouple}
@@ -396,7 +398,7 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                         ? "Chargement des combinaisons…"
                         : coupleError
                            ? `Données indisponibles : ${coupleError}`
-                           : realRunners.length > 0
+                           : allAvailableRunners.length > 0
                               ? "Choisir 2 partants (remplit l'enjeu depuis les données réelles PMU)"
                               : "Aucune donnée disponible"}
                   </span>
@@ -411,9 +413,9 @@ export default function PayoutTab({ runners }: Readonly<{ runners: RunnerSummary
                      </button>
                   )}
                </div>
-               {realRunners.length > 0 && (
+               {allAvailableRunners.length > 0 && (
                   <CouplePicker
-                     runners={realRunners}
+                     runners={allAvailableRunners}
                      betType={betType}
                      placeReports={placeReports}
                      onPick={pickCouple}
