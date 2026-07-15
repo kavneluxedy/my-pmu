@@ -32,7 +32,7 @@ model SavedRace {
   reunion   Int
   course    Int
   label     String? // ex. hippodrome / nom de course, pour l'affichage
-  startTime Int? // epoch ms, si connu (pour info/tri)
+  startTime BigInt? // epoch ms, si connu (pour info/tri) — dépasse la capacité 32 bits d'Int
   payload   String // JSON sérialisé de la ProviderRace (partants + cotes figées)
   savedAt   DateTime @default(now())
 
