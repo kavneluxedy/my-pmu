@@ -106,9 +106,18 @@ export function useRaceRefreshBeforeStart(): void {
   const reunion = stored?.race.reunion;
   const course = stored?.race.course;
 
-  const startTime = programme?.meetings
-    .find((m) => m.reunion === reunion)
-    ?.races.find((c) => c.course === course)?.startTime;
+  // Le programme en session peut porter une autre date que la course chargée
+  // (ex. programme du jour ré-amorcé en tâche de fond par useProgrammePolling
+  // pendant qu'une course d'une autre date est ouverte dans le Simulateur) :
+  // sans ce filtre, reunion/course matchent une course différente et un
+  // refresh se déclenche à un instant sans rapport, pouvant écraser les
+  // cotes affichées avec une réponse vide.
+  const startTime =
+    programme?.date === stored?.date
+      ? programme?.meetings
+          .find((m) => m.reunion === reunion)
+          ?.races.find((c) => c.course === course)?.startTime
+      : undefined;
 
   useEffect(() => {
     if (reunion == null || course == null || typeof startTime !== "number") return;
