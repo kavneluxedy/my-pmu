@@ -72,6 +72,9 @@ export default function ImportPmu() {
     setFavorites(new Set());
     try {
       setRace(await api.course(date, reunion, course));
+      requestAnimationFrame(() => {
+        racePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch (e) {
       setError(String(e));
     } finally {

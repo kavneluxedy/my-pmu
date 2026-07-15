@@ -188,27 +188,6 @@ export interface CoupleMassesInput {
   trj?: number;
 }
 
-/** Sélection de chevaux pour un ticket combiné (numéros de partants). */
-export interface TicketSelection {
-  /**
-   * Chevaux « de base » obligatoirement présents dans chaque combinaison jouée.
-   * Vide = pas de base imposée (champ total sur `associated`).
-   */
-  bases?: number[];
-  /** Chevaux associés (champ) parmi lesquels compléter les combinaisons. */
-  associated: number[];
-  /** Jouer aussi la version « ordre » (multiplie le coût). */
-  ordered?: boolean;
-}
-
-/** Résultat d'un calcul de coût de ticket. */
-export interface TicketCost {
-  betType: BetType;
-  combinations: number;
-  unitStake: number;
-  totalCost: number;
-}
-
 /** Une ligne de mise proposée par le dutching. */
 export interface DutchingLeg {
   /** Identifiant du partant (numéro ou nom). */

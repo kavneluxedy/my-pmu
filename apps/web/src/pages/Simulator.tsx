@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
-import { api, DutchingResult, TicketCost, ValueBetResult } from "../api/client.js";
+import { api, DutchingResult, ValueBetResult } from "../api/client.js";
+import AddToBetsButton from "../components/AddToBetsButton.js";
 import RefreshOddsButton from "../components/RefreshOddsButton.js";
 import RunnerPicker from "../components/RunnerPicker.js";
 import { useCitations } from "../hooks/useCitations.js";
+import { useQuickAddBet } from "../hooks/useQuickAddBet.js";
 import { useSortable } from "../hooks/useSortable.js";
 import { BET_TYPE_LABELS, BET_TYPES, BetType, minStakeFor } from "../lib/betTypes.js";
 import { parseNums, tryEvaluate } from "../lib/calc.js";
 import { citationBlockFor } from "../lib/citation.js";
 import { RunnerSummary } from "../lib/runner.js";
+import { roundStakeToEuro } from "../lib/stake.js";
 import { getStoredRace, useRacePolling, useRaceStore } from "../raceStore.js";
 import PayoutTab from "./PayoutTab.js";
 
-type Tab = "ticket" | "dutching" | "valuebet" | "payout";
+type Tab = "dutching" | "valuebet" | "payout";
 
 /** Partants actifs (non non-partants) avec cote disponible. */
 function activeRunners(race: ReturnType<typeof useRaceStore>) {
@@ -20,7 +23,7 @@ function activeRunners(race: ReturnType<typeof useRaceStore>) {
 }
 
 export default function Simulator() {
-  const [tab, setTab] = useState<Tab>("ticket");
+  const [tab, setTab] = useState<Tab>("dutching");
   const race = useRaceStore();
   const runners = activeRunners(race);
 
@@ -53,79 +56,13 @@ export default function Simulator() {
       )}
 
       <div className="tabs">
-        <button type="button" className={`tab${tab === "ticket" ? " active" : ""}`} onClick={() => setTab("ticket")}>Tickets combinés</button>
         <button type="button" className={`tab${tab === "dutching" ? " active" : ""}`} onClick={() => setTab("dutching")}>Dutching</button>
         <button type="button" className={`tab${tab === "valuebet" ? " active" : ""}`} onClick={() => setTab("valuebet")}>Value bet</button>
         <button type="button" className={`tab${tab === "payout" ? " active" : ""}`} onClick={() => setTab("payout")}>Gains potentiels</button>
       </div>
-      {tab === "ticket" && <TicketTab runners={runners} />}
       {tab === "dutching" && <DutchingTab runners={runners} />}
       {tab === "valuebet" && <ValueBetTab runners={runners} />}
       {tab === "payout" && <PayoutTab runners={runners} />}
-    </div>
-  );
-}
-
-function TicketTab({ runners }: { runners: RunnerSummary[] }) {
-  const [betType, setBetType] = useState("tierce");
-  const [bases, setBases] = useState("");
-  const [associated, setAssociated] = useState(() =>
-    runners.length > 0 ? runners.map((r) => r.number).join(", ") : "1,2,3,4",
-  );
-  const [ordered, setOrdered] = useState(false);
-  const [unitStake, setUnitStake] = useState("1.5");
-  const [result, setResult] = useState<TicketCost | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Mise à jour du champ si la course change après le montage.
-  useEffect(() => {
-    if (runners.length > 0) {
-      setAssociated(runners.map((r) => r.number).join(", "));
-    }
-  }, [runners]);
-
-  const run = async () => {
-    setError(null);
-    try {
-      const res = await api.simTicket({
-        betType,
-        selection: { bases: parseNums(bases), associated: parseNums(associated), ordered },
-        unitStake: Number(unitStake),
-      });
-      setResult(res);
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-
-  return (
-    <div className="panel">
-      <p className="muted">Calcule le nombre de combinaisons et le coût d'un ticket combiné en champ réduit.</p>
-      <div className="form-grid">
-        <div className="field">
-          <label>Type de pari</label>
-          <select value={betType} onChange={(e) => setBetType(e.target.value)}>
-            {BET_TYPES.map((t) => <option key={t} value={t}>{BET_TYPE_LABELS[t]}</option>)}
-          </select>
-        </div>
-        <div className="field"><label>Chevaux de base</label><input value={bases} onChange={(e) => setBases(e.target.value)} placeholder="ex: 7" /></div>
-        <div className="field"><label>Champ associé</label><input value={associated} onChange={(e) => setAssociated(e.target.value)} placeholder="1,2,3,4" /></div>
-        <div className="field"><label>Mise unitaire (€)</label><input type="number" step="0.5" value={unitStake} onChange={(e) => setUnitStake(e.target.value)} /></div>
-        <div className="field">
-          <label>Ordre</label>
-          <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <input type="checkbox" checked={ordered} onChange={(e) => setOrdered(e.target.checked)} style={{ width: "auto" }} /> jouer l'ordre
-          </label>
-        </div>
-        <div className="field"><label>&nbsp;</label><button onClick={run}>Calculer</button></div>
-      </div>
-      {error && <p className="error">{error}</p>}
-      {result && (
-        <div className="result-box">
-          <div><strong>{result.combinations}</strong> combinaisons × {result.unitStake.toFixed(2)} € =
-            <strong> {result.totalCost.toFixed(2)} €</strong> de coût total.</div>
-        </div>
-      )}
     </div>
   );
 }
@@ -138,7 +75,7 @@ function DutchingTab({ runners }: { runners: RunnerSummary[] }) {
   // Champ texte de secours quand aucune course n'est chargée (saisie libre).
   const [rows, setRows] = useState("2, 4, 6");
   const [mode, setMode] = useState<"budget" | "target">("budget");
-  const [amount, setAmount] = useState("100");
+  const [amount, setAmount] = useState("10");
   const [result, setResult] = useState<DutchingResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -225,6 +162,24 @@ function DutchingTab({ runners }: { runners: RunnerSummary[] }) {
 
 function DutchingResultTable({ result }: { result: DutchingResult }) {
   const { sorted: sortedLegs, sort, toggleSort } = useSortable(result.legs);
+  const { addBets } = useQuickAddBet();
+  const [roundStakes, setRoundStakes] = useState(true);
+
+  const stored = getStoredRace();
+  const ctx = stored ? `R${stored.race.reunion}C${stored.race.course} - ` : "Dutching manuel - ";
+  const minStake = minStakeFor("simple_gagnant");
+
+  const addAll = async () => {
+    const drafts = result.legs.map((l) => ({
+      date: new Date().toISOString().slice(0, 10),
+      betType: "simple_gagnant",
+      label: `${ctx}n°${l.selection}`,
+      stake: roundStakes ? roundStakeToEuro(l.stake, minStake) : l.stake,
+      odds: l.odds,
+    }));
+    await addBets(drafts);
+  };
+
   return (
     <div className="result-box">
       <table>
@@ -234,11 +189,31 @@ function DutchingResultTable({ result }: { result: DutchingResult }) {
             <th onClick={() => toggleSort('odds')} style={{ cursor: 'pointer' }}>Cote {sort.key === 'odds' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
             <th onClick={() => toggleSort('stake')} style={{ cursor: 'pointer' }}>Mise {sort.key === 'stake' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
             <th onClick={() => toggleSort('grossReturn')} style={{ cursor: 'pointer' }}>Retour si gagnant {sort.key === 'grossReturn' && (sort.direction === 'asc' ? '▲' : '▼')}</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {sortedLegs.map((l) => (
-            <tr key={String(l.selection)}><td>{l.selection}</td><td>{l.odds}</td><td>{l.stake.toFixed(2)} €</td><td>{l.grossReturn.toFixed(2)} €</td></tr>
+            <tr key={String(l.selection)}>
+              <td>{l.selection}</td>
+              <td>{l.odds}</td>
+              <td>{l.stake.toFixed(2)} €</td>
+              <td>{l.grossReturn.toFixed(2)} €</td>
+              <td>
+                <AddToBetsButton
+                  label="🎫 Parier"
+                  defaultStake={l.stake}
+                  minStake={minStake}
+                  getDraft={(date, stake) => ({
+                    date,
+                    betType: "simple_gagnant",
+                    label: `${ctx}n°${l.selection}`,
+                    stake,
+                    odds: l.odds,
+                  })}
+                />
+              </td>
+            </tr>
           ))}
         </tbody>
       </table>
@@ -250,6 +225,15 @@ function DutchingResultTable({ result }: { result: DutchingResult }) {
       {result.isArbitrage
         ? <div className="warn" style={{ marginTop: 10 }}>Situation d'arbitrage : profit garanti positif (somme des probabilités {result.impliedProbabilitySum} &lt; 1).</div>
         : <div className="warn" style={{ marginTop: 10 }}>Pas d'arbitrage : la marge est défavorable (somme des probabilités {result.impliedProbabilitySum} ≥ 1).</div>}
+      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <button className="cta-add-bet" onClick={addAll}>
+          🎫 Tout ajouter ({result.legs.length} pari{result.legs.length > 1 ? "s" : ""})
+        </button>
+        <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+          <input type="checkbox" checked={roundStakes} onChange={(e) => setRoundStakes(e.target.checked)} />
+          Arrondir les mises à l'euro
+        </label>
+      </div>
     </div>
   );
 }
@@ -420,6 +404,27 @@ function ValueBetTab({ runners }: { runners: RunnerSummary[] }) {
           {result.isValueBet
             ? <div className="warn" style={{ marginTop: 10, color: "#35c46a", borderColor: "#35c46a", background: "rgba(53,196,106,0.1)" }}>✔ Pari à valeur positive (EV+).</div>
             : <div className="warn" style={{ marginTop: 10 }}>Pas de valeur : votre estimation ne bat pas la cote.</div>}
+          <div style={{ marginTop: 12 }}>
+            <AddToBetsButton
+              label="🎫 Ajouter à Mes paris"
+              defaultStake={result.kellyStake}
+              minStake={minStakeFor(betType)}
+              disabled={result.kellyStake <= 0}
+              disabledReason="Mise de Kelly nulle : pas de valeur détectée"
+              getDraft={(date, stake) => {
+                const stored = getStoredRace();
+                const runner = selectedNumber != null ? runners.find((r) => r.number === selectedNumber) : undefined;
+                const ctx = stored ? `R${stored.race.reunion}C${stored.race.course} - ` : "";
+                return {
+                  date,
+                  betType,
+                  label: `${ctx}${runner ? `n°${runner.number} ${runner.name}` : `Value bet cote ${odds}`}`,
+                  stake,
+                  odds: Number(odds),
+                };
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

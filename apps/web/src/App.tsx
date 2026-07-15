@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import ToastViewport from "./components/ToastViewport.js";
 import { useProgrammePolling, useProgrammeStore } from "./programmeStore.js";
 
 const links = [
@@ -259,6 +260,7 @@ export default function App() {
       <main className="content">
         <Outlet />
       </main>
+      <ToastViewport />
     </div>
   );
 }

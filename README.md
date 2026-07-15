@@ -2,8 +2,7 @@
 
 Application web **auto-hébergée** qui remplace les classeurs Excel du parieur : suivi des
 dépenses/gains, fiches des chevaux favoris, et surtout un **simulateur d'optimisation des gains**
-(tickets combinés, dutching, value bet). Données de cotes en saisie manuelle **ou** import
-automatique depuis le PMU.
+(dutching, value bet). Données de cotes en saisie manuelle **ou** import automatique depuis le PMU.
 
 ## Fonctionnalités
 
@@ -11,8 +10,6 @@ automatique depuis le PMU.
 - **Mes paris** : enregistrement, statut (en attente / gagné / perdu), gain, suppression.
 - **Mes chevaux** : fiches favoris (discipline, driver, hippodrome de prédilection, notes).
 - **Simulateur** (cœur de l'outil) :
-  - **Tickets combinés** — coût et nombre de combinaisons pour Trio, Tiercé, Quarté+, Quinté+,
-    Couplé, en champ réduit (chevaux de base + champ associé), version ordre/désordre.
   - **Dutching** — répartition de mise pour un retour identique quel que soit le gagnant, à budget
     fixe ou pour viser un profit net garanti ; détection d'arbitrage.
   - **Value bet** — comparaison probabilité estimée vs cote, espérance de gain (EV), edge, et mise
@@ -60,7 +57,7 @@ Puis ouvrez http://localhost:5173.
 npm test           # tests unitaires du moteur (@pmu/engine)
 ```
 
-Le moteur est couvert par 43 tests (coûts de tickets, dutching, EV/Kelly, stats de bankroll,
+Le moteur est couvert par 87 tests (dutching, EV/Kelly, gains potentiels, stats de bankroll,
 parsing PMU).
 
 ## ⚠️ Import PMU — avertissement
